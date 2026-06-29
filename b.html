@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>加密社工具箱</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;padding:10px;min-height:100vh}
+.header{text-align:center;padding:12px 0}
+.header h1{font-size:20px;font-weight:700;background:linear-gradient(135deg,#00d2ff,#3a7bd5);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#888}
+.card{background:#1a1a2e;border-radius:12px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:6px;margin-bottom:8px}
+.row select,.row input{flex:1;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;outline:none}
+.row select{-webkit-appearance:none;appearance:none}
+.btn{background:linear-gradient(135deg,#3a7bd5,#00d2ff);border:none;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:.4}
+.btn-ai{background:linear-gradient(135deg,#667eea,#764ba2);margin-top:6px}
+.input-group{margin-bottom:8px}
+.input-group label{display:block;font-size:11px;color:#888;margin-bottom:3px}
+.input-group input{width:100%;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:8px;border-radius:6px;font-size:13px;outline:none}
+.log{background:#0a0a15;border-radius:8px;padding:10px;font-family:'Courier New',monospace;font-size:11px;line-height:1.5;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#0f0}
+.log::-webkit-scrollbar{width:3px}
+.log::-webkit-scrollbar-thumb{background:#3a7bd5}
+.footer{text-align:center;padding:16px 0;font-size:10px;color:#555}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-radius:50%;border-top-color:#fff;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tags{margin:6px 0;display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 6px;border-radius:3px}
+.tag-up{background:#00c85322;color:#00c853;border:1px solid #00c85344}
+.tag-down{background:#ff174422;color:#ff1744;border:1px solid #ff174444}
+.tag-neutral{background:#ff910022;color:#ff9100;border:1px solid #ff910044}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔐 加密社工具箱</h1>
+  <p>合约分析 + AI · 手机版</p>
+</div>
+
+<div class="card">
+  <div class="row">
+    <select id="symbol">
+      <option>BTC/USDT</option><option>ETH/USDT</option><option>BNB/USDT</option>
+      <option>SOL/USDT</option><option>XRP/USDT</option>
+    </select>
+    <select id="cycle">
+      <option>10分钟</option><option>30分钟</option><option>1小时</option><option>4小时</option>
+    </select>
+  </div>
+  <button class="btn" id="btnAnalyze" onclick="startAnalysis()">📈 开始分析</button>
+</div>
+
+<div class="card">
+  <div class="input-group" style="margin-bottom:4px">
+    <label>DeepSeek API Key（AI分析用）</label>
+    <div class="row" style="margin-bottom:0">
+      <input type="password" id="apiKey" placeholder="粘贴你的 DeepSeek API Key" style="flex:3">
+      <button onclick="saveKey()" style="flex:1;background:#16213e;border:1px solid #2a2a4a;color:#888;border-radius:6px;font-size:12px;cursor:pointer">💾</button>
+    </div>
+  </div>
+  <button class="btn btn-ai" id="btnAI" onclick="aiAnalysis()">🤖 AI 智能分析</button>
+</div>
+
+<div class="card">
+  <div class="log" id="logOutput">📊 点击"开始分析"获取数据<br>🤖 然后点"AI智能分析"</div>
+</div>
+
+<div class="footer">加密社工具箱 v2.0 · ⚠️ 不构成投资建议</div>
+
+<script>
+let lastData = {};
+let apiKey = localStorage.getItem('deepseek_api_key')||'';
+
+function calcRSI(p,n=14){
+  if(p.length<n+1)return 50;
+  let g=0,l=0;
+  for(let i=p.length-n;i<p.length;i++){let d=p[i]-p[i-1];if(d>0)g+=d;else l-=d}
+  let ag=g/n,al=l/n;if(al===0)return 100;
+  return 100-100/(1+ag/al);
+}
+function calcMA(p,n=20){return p.length<n?p[p.length-1]:p.slice(-n).reduce((a,b)=>a+b,0)/n}
+function calcEMA(p,n){let k=2/(n+1),e=p[0];for(let i=1;i<p.length;i++)e=p[i]*k+e*(1-k);return e}
+function calcMACD(p){
+  // 完整MACD历史用于计算信号线
+  let m=[];for(let i=0;i<p.length;i++)m.push(calcEMA(p.slice(0,i+1),12)-calcEMA(p.slice(0,i+1),26));
+  // 信号线 = 最后9个MACD值的EMA（与C#版一致）
+  let last9=m.slice(-9);
+  let signal=last9.length>=2?calcEMA(last9,9):(m.length>0?m[m.length-1]:0);
+  return{macdLine:m[m.length-1],signalLine:signal,histogram:m[m.length-1]-signal};
+}
+function calcBB(p,n=20,s=2){
+  if(p.length<n)return{upper:p[0],lower:p[0],sma:p[0]};
+  let sma=calcMA(p,n),sl=p.slice(-n),v=sl.reduce((a,x)=>a+(x-sma)**2,0)/n,sd=Math.sqrt(v);
+  return{upper:sma+sd*s,lower:sma-sd*s,sma};
+}
+function calcStoch(h,l,c,n=14){
+  let sh=h.slice(-n),sl=l.slice(-n),hh=Math.max(...sh),ll=Math.min(...sl);
+  let k=hh===ll?0:(c[c.length-1]-ll)/(hh-ll)*100;return{k,d:k}; // 与C#一致: 相等时返回0
+}
+function calcATR(h,l,c,n=14){
+  // 与C#一致: 取最后14个周期,计算13个TR值
+  let start=Math.max(0,h.length-n);
+  let lh=h.slice(start),ll=l.slice(start),lc=c.slice(start);
+  let t=[];for(let i=1;i<lh.length;i++)t.push(Math.max(lh[i]-ll[i],Math.abs(lh[i]-lc[i-1]),Math.abs(ll[i]-lc[i-1])));
+  return t.length?t.reduce((a,b)=>a+b,0)/t.length:0;
+}
+function calcFib(hh,ll){let r=hh-ll;return{'0%':hh,'23.6%':hh-r*.236,'38.2%':hh-r*.382,'50%':hh-r*.5,'61.8%':hh-r*.618,'78.6%':hh-r*.786,'100%':ll,Support:hh-r*.382,Resistance:hh-r*.618,StrongSupport:ll,StrongResistance:hh};}
+
+function vote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26){
+  let b=0,br=0;
+  // 1. RSI
+  if(rsi>70)br++;else if(rsi<30)b++;else if(rsi>50)b++;else br++;
+  // 2. MACD
+  if(macd.macdLine>macd.signalLine)b++;else br++;
+  // 3. 布林带
+  if(cp>bb.upper)br++;else if(cp<bb.lower)b++;
+  // 4. MA
+  if(cp>ma)b++;else br++;
+  // 5. ATR
+  if(atr>av*1.2)b++;else if(atr<av*.8)br++;
+  // 6. EMA交叉
+  if(e12>0&&e26>0){if(e12>e26)b++;else br++;}
+  // 7. 成交量（基础量价）
+  if(av>0&&cp>ma)b++;else if(av>0&&cp<ma)br++;
+  // 8. 成交量+布林带边界强信号（与C#一致）
+  if(cp>bb.upper&&av>0)br++;else if(cp<bb.lower&&av>0)b++;
+  // 9. 随机指标
+  if(st.k>st.d&&st.k<80)b++;else if(st.k<st.d||st.k>80)br++;
+  // 10. 斐波那契（与C#一致：极限位2票，普通位1票）
+  if(fibo.StrongSupport!==undefined&&cp<=fibo.StrongSupport)b+=2;
+  else if(fibo.Support!==undefined&&cp<=fibo.Support*1.02)b++;
+  if(fibo.StrongResistance!==undefined&&cp>=fibo.StrongResistance)br+=2;
+  else if(fibo.Resistance!==undefined&&cp>=fibo.Resistance*0.98)br++;
+  // 多数表决
+  if(b>br)return'上涨';if(br>b)return'下跌';return'中性';
+}
+
+async function startAnalysis(){
+  const btn=document.getElementById('btnAnalyze'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>分析中...';
+  log.textContent='正在获取数据...\n';
+  const sym=document.getElementById('symbol').value.replace('/',''),cycle=document.getElementById('cycle').value;
+  const iv={'10分钟':'15m','30分钟':'30m','1小时':'1h','4小时':'4h'}[cycle];
+  const lm=1000; // 与电脑版一致，Binance API 最多返回1000根
+  try{
+    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=${iv}&limit=${lm}`);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json(),k=d.map(x=>({c:+x[4],h:+x[2],l:+x[3],v:+x[5]}));
+    const c=k.map(x=>x.c),h=k.map(x=>x.h),l=k.map(x=>x.l),v=k.map(x=>x.v),cp=c[c.length-1];
+    const rsi=calcRSI(c),ma=calcMA(c),bb=calcBB(c),macd=calcMACD(c),st=calcStoch(h,l,c);
+    const atr=calcATR(h,l,c),av=v.slice(-20).reduce((a,b)=>a+b,0)/20,cv=v[v.length-1],vr=av>0?cv/av:0;
+    const e12=calcEMA(c,12),e26=calcEMA(c,26),fibo=calcFib(Math.max(...h.slice(-20)),Math.min(...l.slice(-20)));
+    const trend=vote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26);
+    lastData={sym:document.getElementById('symbol').value,cycle,cp,rsi,ma,bb,macd,st,atr,av,cv,vr,fibo,trend,e12,e26};
+    const ms=macd.macdLine>macd.signalLine?'金叉':'死叉';
+    const bs=cp>bb.upper?'上轨看跌':cp<bb.lower?'下轨看涨':'正常';
+    const tb=trend==='上涨'?'🟢':trend==='下跌'?'🔴':'🟡';
+    log.textContent=`当前价格: ${cp.toFixed(2)}
+
+RSI值: ${rsi.toFixed(2)}
+
+移动平均线 (MA): ${ma.toFixed(2)}
+
+EMA12: ${e12.toFixed(2)}, EMA26: ${e26.toFixed(2)} - ${e12>e26?'EMA12上穿EMA26（看涨）':'EMA12下穿EMA26（看跌）'}
+
+布林带状态: 上轨=${bb.upper.toFixed(2)}, 下轨=${bb.lower.toFixed(2)}, 中轨=${bb.sma.toFixed(2)} (${bs})
+
+MACD信号: ${ms}${macd.macdLine>macd.signalLine?'（看涨）':'（看跌）'}
+
+随机指标 (%K): ${st.k.toFixed(2)}, (%D): ${st.d.toFixed(2)}
+
+平均真实波幅 (ATR): ${atr.toFixed(2)}
+
+当前成交量: ${cv.toFixed(2)}, 平均成交量: ${av.toFixed(2)}, 量比: ${vr.toFixed(2)}
+
+斐波那契回撤: 0%=${fibo['0%'].toFixed(2)}, 23.6%=${fibo['23.6%'].toFixed(2)}, 38.2%=${fibo['38.2%'].toFixed(2)}, 50%=${fibo['50%'].toFixed(2)}, 61.8%=${fibo['61.8%'].toFixed(2)}, 78.6%=${fibo['78.6%'].toFixed(2)}, 100%=${fibo['100%'].toFixed(2)}
+支撑/阻力: 强支撑(S1)=${fibo.Support.toFixed(2)}, 强阻力(R1)=${fibo.Resistance.toFixed(2)}
+
+综合趋势: ${trend}
+
+${'─'.repeat(30)}
+🤖 点下方AI分析获取操作建议`;
+  }catch(e){log.textContent='❌ 错误: '+e.message+'\n\n需要VPN访问币安API'}
+  btn.disabled=false;btn.innerHTML='📈 开始分析';
+}
+
+async function aiAnalysis(){
+  const key=document.getElementById('apiKey').value.trim()||apiKey;
+  if(!key){alert('请先输入 DeepSeek API Key！');return}
+  if(!lastData.cp){alert('请先点击"开始分析"获取数据！');return}
+  apiKey=key;localStorage.setItem('deepseek_api_key',key);
+  const btn=document.getElementById('btnAI'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>AI分析中...';
+  log.textContent+='\n🤖 正在请求 DeepSeek...\n';
+  const d=lastData,ms=d.macd.macdLine>d.macd.signalLine?'金叉（看涨）':'死叉（看跌）';
+  const cd=d.cycle==='10分钟'?'超短线10分钟事件合约':d.cycle==='30分钟'?'短线30分钟事件合约':d.cycle==='1小时'?'短线1小时合约':'4小时合约';
+  const prompt=`你是一位加密货币技术分析师。分析 ${d.sym} ${cd}。
+
+规则：超短线事件合约，只有多或空。支撑位=做多位置，阻力位=做空位置。
+
+指标：当前价=${d.cp.toFixed(2)} RSI=${d.rsi.toFixed(2)} MA=${d.ma.toFixed(2)} EMA12=${d.e12.toFixed(2)} EMA26=${d.e26.toFixed(2)} 布林上=${d.bb.upper.toFixed(2)} 布林中=${d.bb.sma.toFixed(2)} 布林下=${d.bb.lower.toFixed(2)} MACD=${ms} 随机%K=${d.st.k.toFixed(2)} %D=${d.st.d.toFixed(2)} ATR=${d.atr.toFixed(2)} 当前量=${d.cv.toFixed(2)} 均量=${d.av.toFixed(2)} 量比=${d.vr.toFixed(2)} 斐波支撑=${d.fibo.Support.toFixed(2)} 斐波阻力=${d.fibo.Resistance.toFixed(2)} 趋势=${d.trend}
+
+格式(严格4行):
+方向：多/空
+入场：XXX-XXX
+止损：XXX
+目标：XXX
+理由：一句话`;
+
+  try{
+    const r=await fetch('https://api.deepseek.com/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:'deepseek-chat',messages:[{role:'system',content:'只根据数据给出多/空判断和点位。不出现"试多""转空""观望"等模糊词。回答不超过6行。'},{role:'user',content:prompt}],temperature:.2,max_tokens:500})
+    });
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error?.message||'HTTP '+r.status);
+    log.textContent+=j.choices[0].message.content;
+  }catch(e){log.textContent+='\n❌ AI失败: '+e.message}
+  btn.disabled=false;btn.innerHTML='🤖 AI 智能分析';
+}
+
+function saveKey(){
+  const k=document.getElementById('apiKey').value.trim();
+  if(k){apiKey=k;localStorage.setItem('deepseek_api_key',k);alert('Key 已保存！')}
+}
+if(apiKey)document.getElementById('apiKey').value=apiKey;
+</script>
+</body>
+</html>
