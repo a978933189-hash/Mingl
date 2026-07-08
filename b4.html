@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>加密社工具箱</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;padding:10px;min-height:100vh}
+.header{text-align:center;padding:12px 0}
+.header h1{font-size:20px;font-weight:700;background:linear-gradient(135deg,#00d2ff,#3a7bd5);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#888}
+.card{background:#1a1a2e;border-radius:12px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:6px;margin-bottom:8px}
+.row select,.row input{flex:1;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;outline:none}
+.row select{-webkit-appearance:none;appearance:none}
+.btn{background:linear-gradient(135deg,#3a7bd5,#00d2ff);border:none;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:.4}
+.btn-ai{background:linear-gradient(135deg,#667eea,#764ba2);margin-top:6px}
+.input-group{margin-bottom:8px}
+.input-group label{display:block;font-size:11px;color:#888;margin-bottom:3px}
+.input-group input{width:100%;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:8px;border-radius:6px;font-size:13px;outline:none}
+.log{background:#0a0a15;border-radius:8px;padding:10px;font-family:'Courier New',monospace;font-size:11px;line-height:1.5;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#0f0}
+.log::-webkit-scrollbar{width:3px}
+.log::-webkit-scrollbar-thumb{background:#3a7bd5}
+.footer{text-align:center;padding:16px 0;font-size:10px;color:#555}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-radius:50%;border-top-color:#fff;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tags{margin:6px 0;display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 6px;border-radius:3px}
+.tag-up{background:#00c85322;color:#00c853;border:1px solid #00c85344}
+.tag-down{background:#ff174422;color:#ff1744;border:1px solid #ff174444}
+.tag-neutral{background:#ff910022;color:#ff9100;border:1px solid #ff910044}
+.seg-btn{background:#16213e;border:2px solid #2a2a4a;color:#666;border-radius:10px;cursor:pointer;transition:all .2s}
+.seg-active{color:#fff}
+.seg-active.spot{border-color:#00d2ff;box-shadow:0 0 12px rgba(0,210,255,.25);background:#0d2137}
+.seg-active.futures{border-color:#f0a500;box-shadow:0 0 12px rgba(240,165,0,.25);background:#2a1f0a}
+.seg-badge{display:inline-block;font-size:9px;padding:2px 6px;border-radius:3px;margin-left:4px}
+.seg-badge.bull{background:#00c85333;color:#00c853}
+.seg-badge.bear{background:#ff174433;color:#ff1744}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔐 加密社工具箱</h1>
+  <p>合约分析 + AI · 大师版</p>
+</div>
+
+<div class="card">
+  <div class="row">
+    <select id="symbol" onchange="onSymbolChange()">
+      <option>BTC/USDT</option><option>ETH/USDT</option><option>BNB/USDT</option>
+      <option>SOL/USDT</option><option>XRP/USDT</option>
+      <option value="other">其他...</option>
+    </select>
+    <select id="cycle">
+      <option>10分钟</option><option>30分钟</option><option>1小时</option><option>4小时</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+    <button id="btnSpot" class="seg-btn seg-active" onclick="switchMarket('spot')" style="flex:1;height:40px;font-size:15px;font-weight:700">📊 现货</button>
+    <button id="btnFutures" class="seg-btn" onclick="switchMarket('futures')" style="flex:1;height:40px;font-size:15px;font-weight:700">📈 合约</button>
+  </div>
+  <div id="customSymbolRow" style="display:none;margin-bottom:8px">
+    <input type="text" id="customSymbol" placeholder="输入币种，如 DOGE/USDT" style="width:100%;background:#16213e;border:1px solid #00d2ff;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;outline:none">
+  </div>
+  <button class="btn" id="btnAnalyze" onclick="startAnalysis()">📈 开始分析</button>
+  <button class="btn" id="btnBacktest" onclick="runBacktestBtn()" style="background:linear-gradient(135deg,#667eea,#764ba2);margin-top:6px">📊 回测</button>
+</div>
+
+<div class="card">
+  <div class="input-group" style="margin-bottom:4px">
+    <label>DeepSeek API Key（AI分析用）</label>
+    <div class="row" style="margin-bottom:0">
+      <input type="password" id="apiKey" placeholder="粘贴你的 DeepSeek API Key" style="flex:3">
+      <button onclick="saveKey()" style="flex:1;background:#16213e;border:1px solid #2a2a4a;color:#888;border-radius:6px;font-size:12px;cursor:pointer">💾</button>
+    </div>
+  </div>
+  <div class="row" style="margin-bottom:4px">
+    <select id="aiModel" style="flex:1;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:8px;border-radius:6px;font-size:12px;outline:none;-webkit-appearance:none;appearance:none">
+      <option value="deepseek-v4-pro">DeepSeek V4-Pro</option>
+      <option value="deepseek-v4-flash">DeepSeek V4-Flash</option>
+    </select>
+  </div>
+  <button class="btn btn-ai" id="btnAI" onclick="aiAnalysis()">🤖 AI 智能分析</button>
+</div>
+
+<div class="card">
+  <div class="log" id="logOutput">📊 点击"开始分析"获取数据<br>🤖 然后点"AI智能分析"</div>
+</div>
+
+<div class="footer">加密社工具箱 v3.0 · ⚠️ 不构成投资建议</div>
+
+<script>
+let lastData={},lastK=[],apiKey=localStorage.getItem('deepseek_api_key')||'';
+let lastCycle='',lastSym='',lastSymRaw='',lastFutures=false;
+
+// ========== 基础指标 ==========
+function calcRSI(p,n=14){
+  if(p.length<n+1)return 50;
+  let g=0,l=0;
+  for(let i=p.length-n;i<p.length;i++){let d=p[i]-p[i-1];if(d>0)g+=d;else l-=d}
+  let ag=g/n,al=l/n;if(al===0)return 100;
+  return 100-100/(1+ag/al);
+}
+function calcMA(p,n=20){return p.length<n?p[p.length-1]:p.slice(-n).reduce((a,b)=>a+b,0)/n}
+function calcEMA(p,n){let k=2/(n+1),e=p[0];for(let i=1;i<p.length;i++)e=p[i]*k+e*(1-k);return e}
+function calcMACD(p){
+  let m=[];for(let i=0;i<p.length;i++)m.push(calcEMA(p.slice(0,i+1),12)-calcEMA(p.slice(0,i+1),26));
+  let last9=m.slice(-9);
+  let signal=last9.length>=2?calcEMA(last9,9):(m.length>0?m[m.length-1]:0);
+  return{macdLine:m[m.length-1],signalLine:signal,histogram:m[m.length-1]-signal};
+}
+function calcBB(p,n=20,s=2){
+  if(p.length<n)return{upper:p[0],lower:p[0],sma:p[0]};
+  let sma=calcMA(p,n),sl=p.slice(-n),v=sl.reduce((a,x)=>a+(x-sma)**2,0)/n,sd=Math.sqrt(v);
+  return{upper:sma+sd*s,lower:sma-sd*s,sma};
+}
+function calcStoch(h,l,c,n=14){
+  let sh=h.slice(-n),sl=l.slice(-n),hh=Math.max(...sh),ll=Math.min(...sl);
+  let k=hh===ll?0:(c[c.length-1]-ll)/(hh-ll)*100;return{k,d:k};
+}
+function calcATR(h,l,c,n=14){
+  let start=Math.max(0,h.length-n);
+  let lh=h.slice(start),ll=l.slice(start),lc=c.slice(start);
+  let t=[];for(let i=1;i<lh.length;i++)t.push(Math.max(lh[i]-ll[i],Math.abs(lh[i]-lc[i-1]),Math.abs(ll[i]-lc[i-1])));
+  return t.length?t.reduce((a,b)=>a+b,0)/t.length:0;
+}
+function calcFib(hh,ll){let r=hh-ll;return{'0%':hh,'23.6%':hh-r*.236,'38.2%':hh-r*.382,'50%':hh-r*.5,'61.8%':hh-r*.618,'78.6%':hh-r*.786,'100%':ll,Support:hh-r*.382,Resistance:hh-r*.618,StrongSupport:ll,StrongResistance:hh};}
+
+// ========== 🕯 K线形态识别 ==========
+function detectPatterns(k){
+  // k: [{o,h,l,c,v},...] 至少3根
+  if(k.length<3)return[];
+  let ps=[];
+  const n=k.length;
+  const c0=k[n-1],c1=k[n-2],c2=k[n-3]; // 最新3根
+  
+  const body=(c)=>({size:Math.abs(c.c-c.o),up:c.c>c.o,range:c.h-c.l,upper:c.c>c.o?c.c-c.o:0,lower:c.c<c.o?c.o-c.c:0});
+  const b0=body(c0),b1=body(c1),b2=body(c2);
+  const avgBody=(b0.size+b1.size+b2.size)/3||1;
+  
+  // 1. 吞没形态 (Engulfing)
+  if(b0.up!==b1.up){
+    if(b0.size>b1.size*1.2&&b0.size>avgBody*1.5){
+      ps.push(b0.up?{name:'🟢 看涨吞没',dir:'bull',weight:3}
+                   :{name:'🔴 看跌吞没',dir:'bear',weight:3});
+    }
+  }
+  
+  // 2. 锤子线 (Hammer) - 下影线 > 实体*2, 上影线很短
+  if(b0.lower>avgBody*2&&(b0.range-b0.lower)<avgBody*0.3){
+    ps.push(c0.c>c0.o?{name:'🔨 锤子线（看涨）',dir:'bull',weight:2}
+                     :{name:'🔨 倒锤子（看涨）',dir:'bull',weight:2});
+  }
+  // 3. 吊颈线/射击之星 - 上影线 > 实体*2
+  if(b0.upper>avgBody*2&&(b0.range-b0.upper)<avgBody*0.3){
+    ps.push(c0.c>c0.o?{name:'⭐ 射击之星（看跌）',dir:'bear',weight:2}
+                     :{name:'💀 吊颈线（看跌）',dir:'bear',weight:2});
+  }
+  
+  // 4. 十字星 (Doji) - 实体 < 波动范围*0.1
+  if(b0.range>0&&b0.size<b0.range*0.15){
+    // 判断是顶部还是底部十字星
+    const upTrend=c0.c>calcMA(k.slice(0,-1).map(x=>x.c),20);
+    ps.push(upTrend?{name:'✝ 高位十字星（警惕反转）',dir:'bear',weight:1}
+                   :{name:'✝ 低位十字星（可能反转）',dir:'bull',weight:1});
+  }
+  
+  // 5. 晨星/黄昏之星（3根形态）
+  if(b2.size>avgBody*1.5&&b1.size<avgBody*0.3&&b0.size>avgBody*1.2){
+    if(!b2.up&&b0.up)ps.push({name:'🌟 晨星（强看涨）',dir:'bull',weight:3});
+    if(b2.up&&!b0.up)ps.push({name:'🌑 黄昏之星（强看跌）',dir:'bear',weight:3});
+  }
+  
+  // 6. 三连阳/三连阴
+  if(k.length>=3){
+    const c3=k[n-3];
+    if(c3.c>c3.o&&c1.c>c1.o&&c0.c>c0.o&&(c2.c>c2.o||true))
+      ps.push({name:'🔥 三连阳（强势）',dir:'bull',weight:2});
+    if(c3.c<c3.o&&c1.c<c1.o&&c0.c<c0.o)
+      ps.push({name:'❄ 三连阴（弱势）',dir:'bear',weight:2});
+  }
+  
+  return ps;
+}
+
+// ========== 📊 OBV 能量潮 + 背离检测 ==========
+function calcOBV(k){
+  let obv=[k[0].v],div=null;
+  for(let i=1;i<k.length;i++){
+    let d=obv[i-1];
+    if(k[i].c>k[i-1].c)d+=k[i].v;
+    else if(k[i].c<k[i-1].c)d-=k[i].v;
+    obv.push(d);
+  }
+  // 背离检测：价格+OBV 各取最后20根的趋势
+  let n=Math.min(20,k.length);
+  let pSl=k.slice(-n),oSl=obv.slice(-n);
+  let pTrend=k[k.length-1].c-k[k.length-n].c;
+  let obvFirst=oSl[0],obvLast=oSl[oSl.length-1];
+  let obvTrend=obvLast-obvFirst;
+  if(pTrend>0&&obvTrend<0&&Math.abs(obvTrend)>Math.abs(obvFirst)*0.05)
+    div={type:'bear','name':'⚠️ 顶背离（价涨量缩→假涨）'};
+  else if(pTrend<0&&obvTrend>0&&Math.abs(obvTrend)>Math.abs(obvFirst)*0.05)
+    div={type:'bull','name':'💎 底背离（价跌量增→吸筹）'};
+  return{val:obv[obv.length-1],trend:obvTrend>0?'up':obvTrend<0?'down':'flat',div};
+}
+
+// ========== 📐 关键价位 ==========
+function keyLevels(h,l,c){
+  // 摆动高低点（最近50根）
+  let n=Math.min(50,h.length),swH=[],swL=[];
+  for(let i=2;i<n-2;i++){
+    let idx=h.length-n+i;
+    if(h[idx]>h[idx-1]&&h[idx]>h[idx-2]&&h[idx]>h[idx+1]&&h[idx]>h[idx+2])swH.push(h[idx]);
+    if(l[idx]<l[idx-1]&&l[idx]<l[idx-2]&&l[idx]<l[idx+1]&&l[idx]<l[idx+2])swL.push(l[idx]);
+  }
+  // 取最近的3个
+  swH.sort((a,b)=>b-a);swL.sort((a,b)=>a-b);
+  let rh=swH.slice(0,3),rl=swL.slice(0,3);
+  
+  // 整数关口
+  let cp=c[c.length-1],rounds=[];
+  let step=cp>1000?100:cp>100?10:cp>10?1:cp>1?0.1:0.01;
+  for(let r=Math.floor(cp/step-step*5)*step;r<=Math.ceil(cp/step+step*5)*step;r+=step){
+    if(r>cp*0.95&&r<cp*1.05&&Math.abs(r-cp)>step*0.5)rounds.push(r);
+  }
+  
+  return{resistances:[...rh,...rounds.filter(r=>r>cp)].sort((a,b)=>a-b).slice(0,4),
+         supports:[...rl,...rounds.filter(r=>r<cp)].sort((a,b)=>b-a).slice(0,4)};
+}
+
+// ========== ⚡ 成交量诊断 ==========
+function volDiagnosis(k){
+  let n=k.length,v=k.map(x=>x.v),last5=v.slice(-5),last20=v.slice(-20);
+  let avg20=last20.reduce((a,b)=>a+b,0)/20;
+  let avg5=last5.reduce((a,b)=>a+b,0)/5;
+  let spike=avg20>0?avg5/avg20:1;
+  let cv=v[v.length-1],cp=k[n-1].c,op=k[n-1].o;
+  
+  let diag=[];
+  // 放量上涨 = 真突破
+  if(spike>1.8&&cp>op)diag.push({name:'📈 放量上涨（真突破）',dir:'bull'});
+  // 放量下跌 = 真砸盘
+  if(spike>1.8&&cp<op)diag.push({name:'📉 放量下跌（真砸盘）',dir:'bear'});
+  // 缩量反弹 = 假涨
+  if(spike<0.6&&cp>op)diag.push({name:'⚠️ 缩量反弹（假涨/诱多）',dir:'bear'});
+  // 缩量下跌 = 磨底
+  if(spike<0.6&&cp<op)diag.push({name:'⏳ 缩量下跌（磨底/衰竭）',dir:'bull'});
+  // 天量换手
+  if(cv>avg20*3)diag.push({name:'💥 天量换手（主力进出）',dir:'neutral'});
+  
+  return{spike,avg20,cv,diag};
+}
+
+// ========== 🗳 综合投票 ==========
+function vote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26,patterns,obv,volDiag,htTrend,trAvg,bodyAvg,curBody){
+  const spike=volDiag.spike;
+  if(trAvg>0&&atr<trAvg)return'中性';
+  if(bodyAvg>0&&curBody<bodyAvg)return'中性';
+  // 🎯 引擎1: 衰竭反转
+  const trendStrong=e26>0&&e12/e26>1.003;
+  if(cp>bb.upper&&rsi>72&&spike>1.3&&!trendStrong)return'下跌';
+  if(cp<bb.lower&&rsi<32&&spike>1.3)return'上涨';
+  // ⚡ 引擎2: 低位吸筹
+  if(spike>1.3&&cp<bb.lower*1.03&&rsi<50)return'上涨';
+  // 📈 引擎3: 顺势追涨
+  if(spike>1.2&&cp>bb.sma+atr*.3&&e12>e26)return'上涨';
+  return'中性';
+}
+
+// ========== 📊 回测引擎 ==========
+function backtestVote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26,obvTrend,volSpike,volTrend,trAvg,bodyAvg,curBody){
+  if(trAvg>0&&atr<trAvg)return{signal:'中性',margin:0};
+  if(bodyAvg>0&&curBody<bodyAvg)return{signal:'中性',margin:0};
+  // 🎯 引擎1: 衰竭反转
+  const trendStrong=e26>0&&e12/e26>1.003;
+  if(cp>bb.upper&&rsi>72&&volSpike>1.3&&!trendStrong)return{signal:'下跌',tag:'rev'};
+  if(cp<bb.lower&&rsi<32&&volSpike>1.3)return{signal:'上涨',tag:'rev'};
+  // ⚡ 引擎2: 低位吸筹
+  if(volSpike>1.3&&cp<bb.lower*1.03&&rsi<50)return{signal:'上涨',tag:'brk'};
+  // 📈 引擎3: 顺势追涨
+  if(volSpike>1.2&&cp>bb.sma+atr*.3&&e12>e26)return{signal:'上涨',tag:'trd'};
+  return{signal:'中性',margin:0};
+}
+
+function runBacktest(allK,cycleName){
+  const total=allK.length,warmup=50;
+  if(total<warmup+2)return null;
+  let wins=0,losses=0,neut=0,bullW=0,bullL=0,bearW=0,bearL=0;
+  let sWins=0,sLosses=0,sNeut=0;
+  let streak=0,maxWin=0,maxLose=0,curDir='';
+  // 信号拆解
+  let bkW={hiVol:0,loVol:0,bbBot:0,bbTop:0,bbMid:0,nSup:0,nRes:0,rev:0,brk:0,trd:0}; // 赢
+  let bkL={hiVol:0,loVol:0,bbBot:0,bbTop:0,bbMid:0,nSup:0,nRes:0,rev:0,brk:0,trd:0}; // 输
+  let bkB={hiVol:0,loVol:0,bbBot:0,bbTop:0,bbMid:0,nSup:0,nRes:0,rev:0,brk:0,trd:0}; // 多
+  let bkk={hiVol:0,loVol:0,bbBot:0,bbTop:0,bbMid:0,nSup:0,nRes:0,rev:0,brk:0,trd:0}; // 空
+  const pct=n=>(bkW[n]+bkL[n])>0?((bkW[n]/(bkW[n]+bkL[n]||1))*100).toFixed(0):'-';
+  
+  for(let i=warmup;i<total-1;i++){
+    // 只用第0到第i根的数据
+    const sliceK=allK.slice(0,i+1);
+    const c=sliceK.map(x=>x.c),h=sliceK.map(x=>x.h),l=sliceK.map(x=>x.l),v=sliceK.map(x=>x.v);
+    const cp=c[c.length-1];
+    
+    // 快速计算核心指标
+    const rsi=calcRSI(c),ma=calcMA(c),bb=calcBB(c),macd=calcMACD(c),st=calcStoch(h,l,c);
+    const atr=calcATR(h,l,c),av=v.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const e12=calcEMA(c,12),e26=calcEMA(c,26);
+    const fibo=calcFib(Math.max(...h.slice(-20)),Math.min(...l.slice(-20)));
+    
+    // OBV趋势
+    let obv=sliceK[0].v,obvFirst=obv;
+    for(let j=1;j<sliceK.length;j++){
+      if(sliceK[j].c>sliceK[j-1].c)obv+=sliceK[j].v;
+      else if(sliceK[j].c<sliceK[j-1].c)obv-=sliceK[j].v;
+    }
+    const obvTrend=obv-obvFirst;
+    
+    // 成交量诊断
+    const last5v=v.slice(-5).reduce((a,b)=>a+b,0)/5;
+    const spike=av>0?last5v/av:1;
+    const volTrend=c[c.length-1]-c[c.length-5];
+    
+    // 波动率门控
+    const trVals=sliceK.map((x,idx)=>{const prev=sliceK[idx-1]||x;return Math.max(x.h-x.l,Math.abs(x.h-prev.c),Math.abs(x.l-prev.c))});
+    const trAvgBT=trVals.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const btBodies=sliceK.map(x=>Math.abs(x.c-x.o));
+    const bodyAvgBT=btBodies.slice(-10).reduce((a,b)=>a+b,0)/10;
+    const curBodyBT=btBodies[btBodies.length-1];
+    
+    const result=backtestVote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26,obvTrend,spike,volTrend,trAvgBT,bodyAvgBT,curBodyBT);
+    const signal=result.signal,tag=result.tag;
+    if(signal==='中性'){neut++;continue}
+    
+    // 验证：第i+1根K线方向
+    const nextC=allK[i+1].c;
+    const won=(signal==='上涨'&&nextC>cp)||(signal==='下跌'&&nextC<cp);
+    if(won){wins++;if(signal==='上涨')bullW++;else bearW++}
+    else{losses++;if(signal==='上涨')bullL++;else bearL++}
+    
+    // 信号拆解
+    const isBull=signal==='上涨';
+    const tgt=won?bkW:bkL,tgtB=isBull?bkB:bkk;
+    if(spike>1.5){tgt.hiVol++;tgtB.hiVol++}else{tgt.loVol++;tgtB.loVol++}
+    if(cp<bb.lower*1.02){tgt.bbBot++;tgtB.bbBot++}
+    else if(cp>bb.upper*0.98){tgt.bbTop++;tgtB.bbTop++}
+    else{tgt.bbMid++;tgtB.bbMid++}
+    if(cp<=fibo.Support*1.01){tgt.nSup++;tgtB.nSup++}
+    else if(cp>=fibo.Resistance*0.99){tgt.nRes++;tgtB.nRes++}
+    if(tag==='rev'){tgt.rev++;tgtB.rev++}else if(tag==='brk'){tgt.brk++;tgtB.brk++}else{tgt.trd++;tgtB.trd++}
+    
+    // 连续赢/输
+    if(won){streak=streak>0?streak+1:1;curDir=signal}else{streak=streak<0?streak-1:-1;curDir=signal}
+    maxWin=Math.max(maxWin,streak);maxLose=Math.min(maxLose,streak);
+    
+    // 严格模式（引擎1衰竭反转 = rev）
+    if(tag==='rev'){if(won)sWins++;else sLosses++;}else sNeut++;
+  }
+  const totalSig=wins+losses;
+  const wr=totalSig>0?(wins/totalSig*100).toFixed(1):'0.0';
+  const bwr=(bullW+bullL)>0?(bullW/(bullW+bullL)*100).toFixed(1):'-';
+  const swr=(bearW+bearL)>0?(bearW/(bearW+bearL)*100).toFixed(1):'-';
+  const payoff=0.8; // 事件合约典型赔付80%
+  const pl=(wins*0.8-losses*1.0).toFixed(1);
+  const sTotal=sWins+sLosses;
+  const sWr=sTotal>0?(sWins/sTotal*100).toFixed(1):'0.0';
+  const sPl=(sWins*0.8-sLosses*1.0).toFixed(1);
+  return{total:total-warmup-1,signals:totalSig,neut,wins,losses,wr,bwr,swr,maxWin:maxWin,maxLose:Math.abs(maxLose),pl,
+         sSignals:sTotal,sWins,sLosses,sNeut,sWr,sPl,
+         bk:{w:bkW,l:bkL,b:bkB,k:bkk,pct}};
+}
+
+// ========== 主分析 ==========
+async function startAnalysis(){
+  const btn=document.getElementById('btnAnalyze'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>分析中...';
+  log.textContent='正在获取数据...\n';
+  const symSelect=document.getElementById('symbol').value;
+  const symRaw=symSelect==='other'?document.getElementById('customSymbol').value.trim():symSelect;
+  if(!symRaw){log.textContent='❌ 请输入币种';btn.disabled=false;btn.innerHTML='📈 开始分析';return}
+  const sym=symRaw.replace(/\s+/g,'').toUpperCase().replace('/','');
+  const futures=isFutures;
+  const base=futures?'https://fapi.binance.com/fapi/v1/klines':'https://api.binance.com/api/v3/klines';
+  const cycle=document.getElementById('cycle').value;
+  const iv={'10分钟':'15m','30分钟':'30m','1小时':'1h','4小时':'4h'}[cycle];
+  const lm=1000;
+  const url=`${base}?symbol=${sym}&interval=${iv}&limit=${lm}`;
+
+  // 大周期映射
+  const htMap={'10分钟':'1h','30分钟':'1h','1小时':'4h','4小时':'1d'};
+  const htIv=cycle==='10分钟'?'1h':cycle==='30分钟'?'1h':cycle==='1小时'?'4h':'1d';
+  const htUrl=`${base}?symbol=${sym}&interval=${htIv}&limit=100`;
+
+  try{
+    // 并行取当前周期 + 大周期
+    const[rCur,rHt]=await Promise.all([fetch(url),fetch(htUrl)]);
+    if(!rCur.ok)throw new Error('HTTP '+rCur.status);
+    
+    const d=await rCur.json();
+    const k=d.map(x=>({o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]}));
+    const c=k.map(x=>x.c),h=k.map(x=>x.h),l=k.map(x=>x.l),v=k.map(x=>x.v),cp=c[c.length-1];
+    
+    // 基础指标
+    const rsi=calcRSI(c),ma=calcMA(c),bb=calcBB(c),macd=calcMACD(c),st=calcStoch(h,l,c);
+    const atr=calcATR(h,l,c),av=v.slice(-20).reduce((a,b)=>a+b,0)/20,cv=v[v.length-1],vr=av>0?cv/av:0;
+    const e12=calcEMA(c,12),e26=calcEMA(c,26),fibo=calcFib(Math.max(...h.slice(-20)),Math.min(...l.slice(-20)));
+    
+    // 🆕 K线形态
+    const patterns=detectPatterns(k);
+    // 🆕 OBV
+    const obv=calcOBV(k);
+    // 🆕 关键价位
+    const levels=keyLevels(h,l,c);
+    // 🆕 成交量诊断
+    const volDiag=volDiagnosis(k);
+    // 🆕 大周期方向
+    let htTrend=null,htInfo='';
+    if(rHt.ok){
+      const hd=await rHt.json(),hk=hd.map(x=>({o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]}));
+      const hc=hk.map(x=>x.c),hcp=hc[hc.length-1];
+      const hma20=calcMA(hc,20),he12=calcEMA(hc,12),he26=calcEMA(hc,26);
+      htTrend=he12>he26&&hcp>hma20?'上涨':he12<he26&&hcp<hma20?'下跌':'中性';
+      htInfo=`${htMap[cycle]}周期: ${htTrend==='上涨'?'🟢':htTrend==='下跌'?'🔴':'🟡'}趋势=${htTrend} 价=${hcp.toFixed(2)}`;
+    }
+    
+    // 波动率门控参数
+    const trs=k.map((x,i)=>{const prev=k[i-1]||x;return Math.max(x.h-x.l,Math.abs(x.h-prev.c),Math.abs(x.l-prev.c))});
+    const trAvg=trs.slice(-20).reduce((a,b)=>a+b,0)/20;
+    const bodies=k.map(x=>Math.abs(x.c-x.o));
+    const bodyAvg=bodies.slice(-10).reduce((a,b)=>a+b,0)/10;
+    const curBody=bodies[bodies.length-1];
+    // 保存数据供回测复用
+    lastK=k;lastCycle=cycle;lastSym=sym;lastSymRaw=symRaw;lastFutures=futures;
+    
+    // 综合趋势
+    const trend=vote(rsi,ma,cp,bb,macd,st,atr,av,fibo,e12,e26,patterns,obv,volDiag,htTrend,trAvg,bodyAvg,curBody);
+    
+    // 构建输出
+    const cvR=volDiag.spike>1.5?`🔥 放量${volDiag.spike.toFixed(1)}x`:
+              volDiag.spike<0.6?`🥶 缩量${volDiag.spike.toFixed(1)}x`:`正常 ${volDiag.spike.toFixed(1)}x`;
+    
+    let patStr=patterns.length?patterns.map(p=>p.name).join('\n'):'无显著形态';
+    let obvStr=obv.div?obv.div.name:`OBV趋势${obv.trend==='up'?'向上':'向下'}`;
+    let volDiagStr=volDiag.diag.length?volDiag.diag.map(d=>d.name).join('\n'):'无量能异常';
+    let lvStr=`阻力: ${levels.resistances.map(x=>x.toFixed(2)).join(', ')}\n支撑: ${levels.supports.map(x=>x.toFixed(2)).join(', ')}`;
+    
+    lastData={sym:symRaw,cycle,market:futures?'合约':'现货',cp,rsi,ma,bb,macd,st,atr,av,cv,vr,fibo,trend,e12,e26,
+              patterns,obv,volDiag,levels,htTrend,htInfo};
+    
+    log.textContent=`📊 ${symRaw} · ${cycle} · ${futures?'合约':'现货'}
+━━━━━━━━━━━━━━━━━━━━
+💰 当前价格: ${cp.toFixed(2)}
+
+🕯 K线形态: ${patStr}
+
+📊 成交量诊断: ${cvR}
+${volDiagStr}
+
+📈 OBV分析: ${obvStr}
+
+📐 关键价位:
+${lvStr}
+
+━━━━━━━━━━━━━━━━━━━━
+📉 技术指标:
+RSI(14): ${rsi.toFixed(2)}
+MA(20): ${ma.toFixed(2)}
+EMA12/26: ${e12.toFixed(2)} / ${e26.toFixed(2)} ${e12>e26?'↑':'↓'}
+布林带: 上${bb.upper.toFixed(2)} 中${bb.sma.toFixed(2)} 下${bb.lower.toFixed(2)}
+MACD: ${macd.macdLine>macd.signalLine?'金叉↑':'死叉↓'}
+随机%K/%D: ${st.k.toFixed(2)} / ${st.d.toFixed(2)}
+ATR(14): ${atr.toFixed(2)}
+量比(20): ${vr.toFixed(2)}
+斐波那契回撤: 0%=${fibo['0%'].toFixed(2)} 23.6%=${fibo['23.6%'].toFixed(2)} 38.2%=${fibo['38.2%'].toFixed(2)}
+                 50%=${fibo['50%'].toFixed(2)} 61.8%=${fibo['61.8%'].toFixed(2)} 78.6%=${fibo['78.6%'].toFixed(2)} 100%=${fibo['100%'].toFixed(2)}
+斐波关键位: 阻力(R1)=${fibo.Support.toFixed(2)} 支撑(S1)=${fibo.Resistance.toFixed(2)}
+
+━━━━━━━━━━━━━━━━━━━━
+📡 ${htInfo}
+
+━━━━━━━━━━━━━━━━━━━━
+🎯 综合趋势: ${trend==='上涨'?'🟢 看涨':trend==='下跌'?'🔴 看跌':'🟡 中性'}
+
+${'─'.repeat(30)}
+🤖 点下方AI分析获取操作建议`;
+    
+  }catch(e){log.textContent='❌ 错误: '+e.message+'\n请求URL: '+url+'\n输入的币种: '+symRaw+'\n清洗后符号: '+sym+'\n\n提示: 检查币种/网络/VPN';}
+  btn.disabled=false;btn.innerHTML='📈 开始分析';
+}
+
+// ========== 回测按钮 ==========
+async function runBacktestBtn(){
+  if(!lastK.length){alert('请先点击"开始分析"获取数据！');return}
+  const btn=document.getElementById('btnBacktest'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>回测中...';
+  const bt=runBacktest(lastK,lastCycle);
+  if(bt){
+    log.textContent=`📊 回测统计（${lastSymRaw} · ${lastCycle}）
+${'─'.repeat(30)}
+📊 ${bt.total}次模拟 | 信号${bt.signals}次 中性${bt.neut}次 | 胜率${bt.wr}% | 盈亏${bt.pl}单
+
+🔬 信号拆解
+按量: 放量${bt.bk.w.hiVol+bt.bk.l.hiVol}次 胜${bt.bk.pct('hiVol')}% | 正常${bt.bk.w.loVol+bt.bk.l.loVol}次 胜${bt.bk.pct('loVol')}%
+按位: 下轨${bt.bk.w.bbBot+bt.bk.l.bbBot}次 胜${bt.bk.pct('bbBot')}% | 中轨${bt.bk.w.bbMid+bt.bk.l.bbMid}次 胜${bt.bk.pct('bbMid')}% | 上轨${bt.bk.w.bbTop+bt.bk.l.bbTop}次 胜${bt.bk.pct('bbTop')}%
+支撑: 触支撑${bt.bk.w.nSup+bt.bk.l.nSup}次 胜${bt.bk.pct('nSup')}% | 触阻力${bt.bk.w.nRes+bt.bk.l.nRes}次 胜${bt.bk.pct('nRes')}%
+引擎: 🎯反转${bt.bk.w.rev+bt.bk.l.rev}次 胜${bt.bk.pct('rev')}% | ⚡突破${bt.bk.w.brk+bt.bk.l.brk}次 胜${bt.bk.pct('brk')}% | 📈追涨${bt.bk.w.trd+bt.bk.l.trd}次 胜${bt.bk.pct('trd')}%
+多空: 📈${bt.bwr}%(${bt.bk.b.hiVol+bt.bk.b.loVol}次) | 📉${bt.swr}%(${bt.bk.k.hiVol+bt.bk.k.loVol}次)
+${'─'.repeat(30)}
+⚠️ 回测仅供参考`;
+  }
+  btn.disabled=false;btn.innerHTML='📊 回测';
+}
+
+// ========== AI分析 ==========
+async function aiAnalysis(){
+  const key=document.getElementById('apiKey').value.trim()||apiKey;
+  if(!key){alert('请先输入 DeepSeek API Key！');return}
+  if(!lastData.cp){alert('请先点击"开始分析"获取数据！');return}
+  apiKey=key;localStorage.setItem('deepseek_api_key',key);
+  const btn=document.getElementById('btnAI'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>AI分析中...';
+  log.textContent+='\n🤖 正在请求 DeepSeek...\n';
+  const d=lastData,ms=d.macd.macdLine>d.macd.signalLine?'金叉（看涨）':'死叉（看跌）';
+  const cd=d.cycle==='10分钟'?'超短线10分钟事件合约':d.cycle==='30分钟'?'短线30分钟事件合约':d.cycle==='1小时'?'短线1小时合约':'4小时合约';
+  const patInfo=d.patterns&&d.patterns.length?d.patterns.map(p=>p.name).join('；'):'无显著形态';
+  const obvInfo=d.obv&&d.obv.div?d.obv.div.name:'OBV正常';
+  const volDiagInfo=d.volDiag&&d.volDiag.diag.length?d.volDiag.diag.map(x=>x.name).join('；'):'无量能异常';
+  const htInfo=d.htInfo||'无大周期数据';
+  const lvInfo=d.levels?`阻力=${d.levels.resistances.slice(0,3).map(x=>x.toFixed(2)).join(',')} 支撑=${d.levels.supports.slice(0,3).map(x=>x.toFixed(2)).join(',')}`:'';
+
+  const prompt=`你是一位顶级加密货币交易大师。分析 ${d.sym} ${cd}（${d.market}市场）。
+
+规则：超短线事件合约，只给多或空，不给观望。支撑=做多入场区，阻力=做空入场区。
+
+【量价结构】
+K线形态: ${patInfo}
+成交量诊断: ${volDiagInfo}
+OBV分析: ${obvInfo}
+
+【关键价位】
+${lvInfo}
+
+【技术指标】
+当前价=${d.cp.toFixed(2)} RSI=${d.rsi.toFixed(2)} MA20=${d.ma.toFixed(2)} EMA12=${d.e12.toFixed(2)} EMA26=${d.e26.toFixed(2)} 布林上=${d.bb.upper.toFixed(2)} 布林下=${d.bb.lower.toFixed(2)} MACD=${ms} %K=${d.st.k.toFixed(2)} ATR=${d.atr.toFixed(2)} 量比=${d.vr.toFixed(2)} 斐波支撑=${d.fibo.Support.toFixed(2)} 斐波阻力=${d.fibo.Resistance.toFixed(2)}
+
+【大周期共振】
+${htInfo}
+
+【系统综合趋势】${d.trend}
+
+格式(严格5行):
+方向：多/空
+入场：XXX-XXX
+止损：XXX
+目标：XXX
+理由：一句话（结合量价+形态+关键位）`;
+
+  try{
+    const r=await fetch('https://api.deepseek.com/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:document.getElementById('aiModel').value,messages:[{role:'system',content:'你是顶级交易大师。只给明确多/空判断，不出现"建议观望""试多""偏多"等模糊词。结合量价结构+形态+关键位给出理由。回答不超过7行。'},{role:'user',content:prompt}],temperature:.2,max_tokens:600})
+    });
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error?.message||'HTTP '+r.status);
+    log.textContent+=j.choices[0].message.content;
+  }catch(e){log.textContent+='\n❌ AI失败: '+e.message}
+  btn.disabled=false;btn.innerHTML='🤖 AI 智能分析';
+}
+
+function onSymbolChange(){
+  const v=document.getElementById('symbol').value;
+  document.getElementById('customSymbolRow').style.display=v==='other'?'block':'none';
+}
+
+let isFutures=false;function switchMarket(m){isFutures=m==='futures';const bs=document.getElementById('btnSpot'),bf=document.getElementById('btnFutures');bs.className=isFutures?'seg-btn':'seg-btn seg-active spot';bf.className=isFutures?'seg-btn seg-active futures':'seg-btn';}
+
+function saveKey(){
+  const k=document.getElementById('apiKey').value.trim();
+  if(k){apiKey=k;localStorage.setItem('deepseek_api_key',k);alert('Key 已保存！')}
+}
+if(apiKey)document.getElementById('apiKey').value=apiKey;
+</script>
+</body>
+</html>
