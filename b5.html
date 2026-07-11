@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>加密社工具箱 · Zora体系版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;padding:10px;min-height:100vh}
+.header{text-align:center;padding:12px 0}
+.header h1{font-size:20px;font-weight:700;background:linear-gradient(135deg,#00d2ff,#3a7bd5);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#888}
+.card{background:#1a1a2e;border-radius:12px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:6px;margin-bottom:8px}
+.row select,.row input{flex:1;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;outline:none}
+.row select{-webkit-appearance:none;appearance:none}
+.btn{background:linear-gradient(135deg,#3a7bd5,#00d2ff);border:none;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:.4}
+.btn-ai{background:linear-gradient(135deg,#667eea,#764ba2);margin-top:6px}
+.btn-zora{background:linear-gradient(135deg,#f0a500,#ff6b35);margin-top:6px}
+.input-group{margin-bottom:8px}
+.input-group label{display:block;font-size:11px;color:#888;margin-bottom:3px}
+.input-group input{width:100%;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:8px;border-radius:6px;font-size:13px;outline:none}
+.log{background:#0a0a15;border-radius:8px;padding:10px;font-family:'Courier New',monospace;font-size:11px;line-height:1.5;max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#0f0}
+.log::-webkit-scrollbar{width:3px}
+.log::-webkit-scrollbar-thumb{background:#3a7bd5}
+.footer{text-align:center;padding:16px 0;font-size:10px;color:#555}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-radius:50%;border-top-color:#fff;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tags{margin:6px 0;display:flex;gap:4px;flex-wrap:wrap}
+.tag{font-size:10px;padding:2px 6px;border-radius:3px}
+.tag-up{background:#00c85322;color:#00c853;border:1px solid #00c85344}
+.tag-down{background:#ff174422;color:#ff1744;border:1px solid #ff174444}
+.tag-neutral{background:#ff910022;color:#ff9100;border:1px solid #ff910044}
+.tag-signal-s{background:#ff6b3522;color:#ff6b35;border:1px solid #ff6b3544;font-weight:700}
+.tag-signal-a{background:#3a7bd522;color:#3a7bd5;border:1px solid #3a7bd544}
+.tag-signal-b{background:#88888822;color:#888;border:1px solid #88888844}
+.seg-btn{background:#16213e;border:2px solid #2a2a4a;color:#666;border-radius:10px;cursor:pointer;transition:all .2s}
+.seg-active{color:#fff}
+.seg-active.spot{border-color:#00d2ff;box-shadow:0 0 12px rgba(0,210,255,.25);background:#0d2137}
+.seg-active.futures{border-color:#f0a500;box-shadow:0 0 12px rgba(240,165,0,.25);background:#2a1f0a}
+.vp-viz{display:flex;align-items:flex-end;height:80px;gap:1px;margin:6px 0;padding:4px;background:#0a0a15;border-radius:6px;overflow-x:auto}
+.vp-bar{flex:1;min-width:3px;border-radius:1px 1px 0 0}
+.vp-bar.poc{background:#ff6b35}
+.vp-bar.hvn{background:#00c85388}
+.vp-bar.lvn{background:#ff174444}
+.vp-bar.normal{background:#3a7bd544}
+.vp-va{position:relative;height:2px;background:#00d2ff44;margin:2px 0}
+.smc-line{font-size:10px;color:#888;padding:2px 4px;margin:2px 0;background:#0a0a15;border-radius:4px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔐 加密社工具箱 · Zora体系</h1>
+  <p>SMC + VP + Order Flow + GEX 四维分析</p>
+</div>
+
+<div class="card">
+  <div class="row">
+    <select id="symbol" onchange="onSymbolChange()">
+      <option>BTC/USDT</option><option>ETH/USDT</option><option>BNB/USDT</option>
+      <option>SOL/USDT</option><option>XRP/USDT</option>
+      <option value="other">其他...</option>
+    </select>
+    <select id="cycle">
+      <option>10分钟</option><option>30分钟</option><option>1小时</option><option>4小时</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:8px">
+    <button id="btnSpot" class="seg-btn seg-active" onclick="switchMarket('spot')" style="flex:1;height:40px;font-size:15px;font-weight:700">📊 现货</button>
+    <button id="btnFutures" class="seg-btn" onclick="switchMarket('futures')" style="flex:1;height:40px;font-size:15px;font-weight:700">📈 合约</button>
+  </div>
+  <div id="customSymbolRow" style="display:none;margin-bottom:8px">
+    <input type="text" id="customSymbol" placeholder="输入币种，如 DOGE/USDT" style="width:100%;background:#16213e;border:1px solid #00d2ff;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;outline:none">
+  </div>
+  <button class="btn" id="btnAnalyze" onclick="startAnalysis()">📈 Zora四维分析</button>
+</div>
+
+<div class="card">
+  <div class="input-group" style="margin-bottom:4px">
+    <label>DeepSeek API Key（AI分析用）</label>
+    <div class="row" style="margin-bottom:0">
+      <input type="password" id="apiKey" placeholder="粘贴你的 DeepSeek API Key" style="flex:3">
+      <button onclick="saveKey()" style="flex:1;background:#16213e;border:1px solid #2a2a4a;color:#888;border-radius:6px;font-size:12px;cursor:pointer">💾</button>
+    </div>
+  </div>
+  <div class="row" style="margin-bottom:4px">
+    <select id="aiModel" style="flex:1;background:#16213e;border:1px solid #2a2a4a;color:#e0e0e0;padding:8px;border-radius:6px;font-size:12px;outline:none;-webkit-appearance:none;appearance:none">
+      <option value="deepseek-v4-pro">DeepSeek V4-Pro</option>
+      <option value="deepseek-v4-flash">DeepSeek V4-Flash</option>
+    </select>
+  </div>
+  <button class="btn btn-ai" id="btnAI" onclick="aiAnalysis()">🤖 AI 智能分析（Zora体系）</button>
+  <button class="btn btn-zora" id="btnSignal" onclick="showSignalDetail()" style="display:none">📋 当前信号详解</button>
+</div>
+
+<div id="vpVizCard" class="card" style="display:none">
+  <div style="font-size:11px;color:#888;margin-bottom:4px;display:flex;justify-content:space-between">
+    <span>📊 Volume Profile</span>
+    <span id="vpLabels"></span>
+  </div>
+  <div class="vp-viz" id="vpViz"></div>
+  <div class="smc-line" id="smcInfo"></div>
+</div>
+
+<div class="card">
+  <div class="log" id="logOutput">📊 点击"Zora四维分析"获取数据<br>🤖 然后点"AI智能分析"</div>
+</div>
+
+<div class="footer">Zora体系 v1.0 · SMC+VP+Order Flow+GEX · 不构成投资建议</div>
+
+<script>
+let lastData={},lastK=[],apiKey=localStorage.getItem('deepseek_api_key')||'';
+let lastCycle='',lastSym='',lastSymRaw='',lastFutures=false;
+
+// ========== 基础指标（保留原函数） ==========
+function calcRSI(p,n=14){
+  if(p.length<n+1)return 50;
+  let g=0,l=0;
+  for(let i=p.length-n;i<p.length;i++){let d=p[i]-p[i-1];if(d>0)g+=d;else l-=d}
+  let ag=g/n,al=l/n;if(al===0)return 100;
+  return 100-100/(1+ag/al);
+}
+function calcMA(p,n=20){return p.length<n?p[p.length-1]:p.slice(-n).reduce((a,b)=>a+b,0)/n}
+function calcEMA(p,n){let k=2/(n+1),e=p[0];for(let i=1;i<p.length;i++)e=p[i]*k+e*(1-k);return e}
+function calcMACD(p){
+  let m=[];for(let i=0;i<p.length;i++)m.push(calcEMA(p.slice(0,i+1),12)-calcEMA(p.slice(0,i+1),26));
+  let last9=m.slice(-9);
+  let signal=last9.length>=2?calcEMA(last9,9):(m.length>0?m[m.length-1]:0);
+  return{macdLine:m[m.length-1],signalLine:signal,histogram:m[m.length-1]-signal};
+}
+function calcBB(p,n=20,s=2){
+  if(p.length<n)return{upper:p[0],lower:p[0],sma:p[0]};
+  let sma=calcMA(p,n),sl=p.slice(-n),v=sl.reduce((a,x)=>a+(x-sma)**2,0)/n,sd=Math.sqrt(v);
+  return{upper:sma+sd*s,lower:sma-sd*s,sma};
+}
+function calcStoch(h,l,c,n=14){
+  let sh=h.slice(-n),sl=l.slice(-n),hh=Math.max(...sh),ll=Math.min(...sl);
+  let k=hh===ll?0:(c[c.length-1]-ll)/(hh-ll)*100;return{k,d:k};
+}
+function calcATR(h,l,c,n=14){
+  let start=Math.max(0,h.length-n);
+  let lh=h.slice(start),ll=l.slice(start),lc=c.slice(start);
+  let t=[];for(let i=1;i<lh.length;i++)t.push(Math.max(lh[i]-ll[i],Math.abs(lh[i]-lc[i-1]),Math.abs(ll[i]-lc[i-1])));
+  return t.length?t.reduce((a,b)=>a+b,0)/t.length:0;
+}
+function calcFib(hh,ll){let r=hh-ll;return{'0%':hh,'23.6%':hh-r*.236,'38.2%':hh-r*.382,'50%':hh-r*.5,'61.8%':hh-r*.618,'78.6%':hh-r*.786,'100%':ll,Support:hh-r*.382,Resistance:hh-r*.618,StrongSupport:ll,StrongResistance:hh};}
+
+// ========== 🕯 K线形态识别（保留） ==========
+function detectPatterns(k){
+  if(k.length<3)return[];
+  let ps=[];
+  const n=k.length;
+  const c0=k[n-1],c1=k[n-2],c2=k[n-3];
+  const body=(c)=>({size:Math.abs(c.c-c.o),up:c.c>c.o,range:c.h-c.l,upper:c.c>c.o?c.c-c.o:0,lower:c.c<c.o?c.o-c.c:0});
+  const b0=body(c0),b1=body(c1),b2=body(c2);
+  const avgBody=(b0.size+b1.size+b2.size)/3||1;
+  if(b0.up!==b1.up){
+    if(b0.size>b1.size*1.2&&b0.size>avgBody*1.5)
+      ps.push(b0.up?{name:'🟢 看涨吞没',dir:'bull',weight:3}:{name:'🔴 看跌吞没',dir:'bear',weight:3});
+  }
+  if(b0.lower>avgBody*2&&(b0.range-b0.lower)<avgBody*0.3)
+    ps.push({name:'🔨 锤子线',dir:'bull',weight:2});
+  if(b0.upper>avgBody*2&&(b0.range-b0.upper)<avgBody*0.3)
+    ps.push({name:'⭐ 射击之星',dir:'bear',weight:2});
+  if(b0.range>0&&b0.size<b0.range*0.15){
+    const upTrend=c0.c>calcMA(k.slice(0,-1).map(x=>x.c),20);
+    ps.push(upTrend?{name:'✝ 高位十字星',dir:'bear',weight:1}:{name:'✝ 低位十字星',dir:'bull',weight:1});
+  }
+  if(b2.size>avgBody*1.5&&b1.size<avgBody*0.3&&b0.size>avgBody*1.2){
+    if(!b2.up&&b0.up)ps.push({name:'🌟 晨星（强看涨）',dir:'bull',weight:3});
+    if(b2.up&&!b0.up)ps.push({name:'🌑 黄昏之星（强看跌）',dir:'bear',weight:3});
+  }
+  if(k.length>=3){
+    const c3=k[n-3];
+    if(c3.c>c3.o&&c1.c>c1.o&&c0.c>c0.o)ps.push({name:'🔥 三连阳',dir:'bull',weight:2});
+    if(c3.c<c3.o&&c1.c<c1.o&&c0.c<c0.o)ps.push({name:'❄ 三连阴',dir:'bear',weight:2});
+  }
+  return ps;
+}
+
+// ========== 📊 OBV ==========
+function calcOBV(k){
+  let obv=[k[0].v],div=null;
+  for(let i=1;i<k.length;i++){
+    let d=obv[i-1];
+    if(k[i].c>k[i-1].c)d+=k[i].v;else if(k[i].c<k[i-1].c)d-=k[i].v;
+    obv.push(d);
+  }
+  let n=Math.min(20,k.length);
+  let pSl=k.slice(-n),oSl=obv.slice(-n);
+  let pTrend=k[k.length-1].c-k[k.length-n].c;
+  let obvFirst=oSl[0],obvLast=oSl[oSl.length-1];
+  let obvTrend=obvLast-obvFirst;
+  if(pTrend>0&&obvTrend<0&&Math.abs(obvTrend)>Math.abs(obvFirst)*0.05)
+    div={type:'bear',name:'⚠️ 顶背离（价涨量缩→假涨）'};
+  else if(pTrend<0&&obvTrend>0&&Math.abs(obvTrend)>Math.abs(obvFirst)*0.05)
+    div={type:'bull',name:'💎 底背离（价跌量增→吸筹）'};
+  return{val:obv[obv.length-1],trend:obvTrend>0?'up':obvTrend<0?'down':'flat',div};
+}
+
+// ========== 📐 关键价位 ==========
+function keyLevels(h,l,c){
+  let n=Math.min(50,h.length),swH=[],swL=[];
+  for(let i=2;i<n-2;i++){
+    let idx=h.length-n+i;
+    if(h[idx]>h[idx-1]&&h[idx]>h[idx-2]&&h[idx]>h[idx+1]&&h[idx]>h[idx+2])swH.push(h[idx]);
+    if(l[idx]<l[idx-1]&&l[idx]<l[idx-2]&&l[idx]<l[idx+1]&&l[idx]<l[idx+2])swL.push(l[idx]);
+  }
+  swH.sort((a,b)=>b-a);swL.sort((a,b)=>a-b);
+  let rh=swH.slice(0,3),rl=swL.slice(0,3);
+  let cp=c[c.length-1],rounds=[];
+  let step=cp>1000?100:cp>100?10:cp>10?1:cp>1?0.1:0.01;
+  for(let r=Math.floor(cp/step-step*5)*step;r<=Math.ceil(cp/step+step*5)*step;r+=step){
+    if(r>cp*0.95&&r<cp*1.05&&Math.abs(r-cp)>step*0.5)rounds.push(r);
+  }
+  return{resistances:[...rh,...rounds.filter(r=>r>cp)].sort((a,b)=>a-b).slice(0,4),
+         supports:[...rl,...rounds.filter(r=>r<cp)].sort((a,b)=>b-a).slice(0,4)};
+}
+
+// ========== ⚡ 成交量诊断 ==========
+function volDiagnosis(k){
+  let n=k.length,v=k.map(x=>x.v),last5=v.slice(-5),last20=v.slice(-20);
+  let avg20=last20.reduce((a,b)=>a+b,0)/20;
+  let avg5=last5.reduce((a,b)=>a+b,0)/5;
+  let spike=avg20>0?avg5/avg20:1;
+  let cv=v[v.length-1],cp=k[n-1].c,op=k[n-1].o;
+  let diag=[];
+  if(spike>1.8&&cp>op)diag.push({name:'📈 放量上涨',dir:'bull'});
+  if(spike>1.8&&cp<op)diag.push({name:'📉 放量下跌',dir:'bear'});
+  if(spike<0.6&&cp>op)diag.push({name:'⚠️ 缩量反弹（诱多）',dir:'bear'});
+  if(spike<0.6&&cp<op)diag.push({name:'⏳ 缩量下跌（衰竭）',dir:'bull'});
+  if(cv>avg20*3)diag.push({name:'💥 天量换手',dir:'neutral'});
+  return{spike,avg20,cv,diag};
+}
+
+// ============================================================
+// ========== ZORA 体系核心函数 ==========
+// ============================================================
+
+// ---------- 1. Volume Profile (成交量分布) ----------
+function calcVP(k, numBins=60){
+  if(k.length<10)return null;
+  let maxH=Math.max(...k.map(x=>x.h));
+  let minL=Math.min(...k.map(x=>x.l));
+  let range=maxH-minL;
+  if(range<=0)return null;
+  let binSize=range/numBins;
+  let bins=[];
+  for(let i=0;i<numBins;i++){
+    let low=minL+binSize*i;
+    let high=low+binSize;
+    bins.push({low,high,vol:0,count:0,mid:low+binSize/2});
+  }
+  // 分配成交量
+  for(let bar of k){
+    let bLow=Math.min(bar.o,bar.c);
+    let bHigh=Math.max(bar.o,bar.c);
+    let volPerUnit=bar.v/(bHigh-bLow||1);
+    for(let b of bins){
+      let overlap=Math.max(0,Math.min(b.high,bHigh)-Math.max(b.low,bLow));
+      if(overlap>0){
+        let v=volPerUnit*overlap;
+        b.vol+=v;b.count++;
+      }
+    }
+  }
+  // 排序找POC
+  let sorted=[...bins].sort((a,b)=>b.vol-a.vol);
+  let pocBin=sorted[0];
+  let totalVol=bins.reduce((a,b)=>a+b.vol,0);
+  // 找VA（70%成交量）
+  let vaBins=[];
+  let accVol=0;
+  for(let b of sorted){
+    if(accVol/totalVol>=0.7)break;
+    vaBins.push(b);
+    accVol+=b.vol;
+  }
+  let vaLow=Math.min(...vaBins.map(b=>b.low));
+  let vaHigh=Math.max(...vaBins.map(b=>b.high));
+  // 识别HVN（高成交节点）：成交量 > 平均的1.5倍
+  let avgBinVol=totalVol/numBins;
+  let hvnBins=bins.filter(b=>b.vol>avgBinVol*1.5);
+  // 识别LVN（低成交节点）：成交量 < 平均的0.3倍
+  let lvnBins=bins.filter(b=>b.vol<avgBinVol*0.3&&b.vol>0);
+  // POC附近的价格
+  let poc=pocBin.mid;
+  return{
+    vah:vaHigh,val:vaLow,poc,
+    hvnPrices:hvnBins.map(b=>({price:b.mid,vol:b.vol})),
+    lvnPrices:lvnBins.map(b=>({price:b.mid,vol:b.vol})),
+    bins:bins.map(b=>({price:b.mid,vol:b.vol,isHvn:b.vol>avgBinVol*1.5,isLvn:b.vol<avgBinVol*0.3&&b.vol>0})),
+    totalVol,avgBinVol
+  };
+}
+
+// ---------- 2. SMC 市场结构识别 ----------
+function calcSMC(h,l,c){
+  if(h.length<30)return{trend:'neutral',ob:[],liqPools:[]};
+  // 识别摆动高点和低点
+  let swings=[];
+  let n=Math.min(50,h.length);
+  for(let i=5;i<n-5;i++){
+    let idx=h.length-n+i;
+    let isHigh=h[idx]>h[idx-1]&&h[idx]>h[idx-2]&&h[idx]>h[idx-3]&&h[idx]>h[idx+1]&&h[idx]>h[idx+2]&&h[idx]>h[idx+3];
+    let isLow=l[idx]<l[idx-1]&&l[idx]<l[idx-2]&&l[idx]<l[idx-3]&&l[idx]<l[idx+1]&&l[idx]<l[idx+2]&&l[idx]<l[idx+3];
+    if(isHigh||isLow)swings.push({idx,price:isHigh?h[idx]:l[idx],type:isHigh?'high':'low'});
+  }
+  // 判断趋势结构（最近6个摆动点）
+  let recent=swings.slice(-6);
+  let highs=recent.filter(s=>s.type==='high').map(s=>s.price);
+  let lows=recent.filter(s=>s.type==='low').map(s=>s.price);
+  let trend='neutral';
+  if(highs.length>=2&&lows.length>=2){
+    let hh=highs[highs.length-1]>highs[highs.length-2];
+    let hl=lows[lows.length-1]>lows[lows.length-2];
+    let lh=highs[highs.length-1]<highs[highs.length-2];
+    let ll=lows[lows.length-1]<lows[lows.length-2];
+    if(hh&&hl)trend='bull';
+    else if(lh&&ll)trend='bear';
+    else if(highs.length>=3&&lows.length>=3){
+      if(highs[highs.length-1]>highs[highs.length-3]&&lows[lows.length-1]>lows[lows.length-3])trend='bull';
+      else if(highs[highs.length-1]<highs[highs.length-3]&&lows[lows.length-1]<lows[lows.length-3])trend='bear';
+    }
+  }
+  // 识别OB（订单块）：寻找大推力K线
+  let ob=[];
+  let cp=c[c.length-1];
+  for(let i=Math.max(0,c.length-30);i<c.length-3;i++){
+    let body=Math.abs(c[i]-c[i-1]);
+    let avgBody=0;
+    for(let j=Math.max(0,i-5);j<i;j++)avgBody+=Math.abs(c[j]-c[j-1]);
+    avgBody/=Math.min(5,i);
+    if(avgBody>0&&body>avgBody*2.5){
+      if(c[i]>c[i-1]){ // 大阳线 → 买方OB
+        ob.push({type:'bull',price:l[i],strength:body/avgBody});
+      }else{ // 大阴线 → 卖方OB
+        ob.push({type:'bear',price:h[i],strength:body/avgBody});
+      }
+    }
+  }
+  // 流动性池：前高前低
+  let liqPools={highs:highs.slice(-3),lows:lows.slice(-3)};
+  
+  // 当前SMC位置判断
+  let pos='';
+  let lastSwing=recent[recent.length-1];
+  if(lastSwing){
+    let distFromLast=Math.abs(cp-lastSwing.price);
+    let range=Math.max(...h.slice(-20))-Math.min(...l.slice(-20));
+    if(range>0&&distFromLast/range<0.1){
+      pos=lastSwing.type==='high'?'处于摆动高点附近':'处于摆动低点附近';
+    }
+  }
+  
+  return{trend,ob:ob.slice(0,3),liqPools,swing:swings.length>0?swings[swings.length-1]:null,pos};
+}
+
+// ---------- 3. 吸收背离检测 ----------
+function detectAbsorption(k){
+  if(k.length<10)return null;
+  let n=k.length;
+  let c=k.map(x=>x.c),v=k.map(x=>x.v);
+  let recent20=c.slice(-20);
+  let recent10=c.slice(-10);
+  let volSlope=v.slice(-10).reduce((a,b,i,arr)=>a+(b-(arr.reduce((s,x)=>s+x,0)/arr.length)),0);
+  // 检测：大额卖单出现但价格不跌
+  let bigBars=k.slice(-10).filter(x=>x.v>calcMA(v,20)*2);
+  let absorptionSignals=[];
+  for(let bar of bigBars){
+    let idx=k.indexOf(bar);
+    if(idx<k.length-1){
+      let nextBar=k[idx+1];
+      // 大实体阴线（卖压）但下一根不继续跌
+      if(bar.c<bar.o&&nextBar.c>=bar.c){
+        absorptionSignals.push({idx,price:bar.l,desc:'大额卖单被吸收',strength:'mid'});
+      }
+      // 大实体阳线但下一根不继续涨（卖盘吸收反转为买盘）
+      if(bar.c>bar.o&&nextBar.c>=bar.c){
+        absorptionSignals.push({idx,price:bar.l,desc:'主动买盘推动',strength:'high'});
+      }
+    }
+  }
+  // OBV背离作为吸收的辅助判断
+  let obv=calcOBV(k);
+  return{signals:absorptionSignals.slice(0,3),obvDiv:obv.div};
+}
+
+// ---------- 4. GEX状态估计（无期权数据，通过价格行为近似） ----------
+function estimateGEX(k,atr){
+  if(k.length<20)return{state:'unknown',desc:'数据不足'};
+  let c=k.map(x=>x.c),v=k.map(x=>x.v);
+  let cp=c[c.length-1];
+  let ma20=calcMA(c,20);
+  let aboveZero=cp>ma20;
+  // 计算价格加速/减速
+  let mom5=c[c.length-1]-c[c.length-6];
+  let mom10=c[c.length-1]-c[c.length-11];
+  let volAvg=v.slice(-20).reduce((a,b)=>a+b,0)/20;
+  let volRecent=v.slice(-5).reduce((a,b)=>a+b,0)/5;
+  let volRatio=volRecent/volAvg;
+  // 波动率紧缩（挤压）判断
+  let bb=calcBB(c);
+  let bbWidth=(bb.upper-bb.lower)/bb.sma;
+  let avgWidth=0.05; // 假设正常宽度5%
+  
+  let state,desc,strength;
+  // 状态①：高正GEX（震荡减震器）
+  if(aboveZero&&bbWidth<avgWidth*1.2&&volRatio<1.2&&Math.abs(mom5)<atr*0.5){
+    state='highPositive';
+    desc='🔵 高正GEX区 — 震荡减震器模式';
+    strength='高正';
+  }
+  // 状态②：低正GEX（真突破窗口）
+  else if(aboveZero&&(volRatio>1.3||bbWidth>avgWidth*1.3||Math.abs(mom5)>atr*1.2)){
+    state='lowPositive';
+    desc='🟢 低正GEX区 — 真突破/趋势窗口';
+    strength='低正';
+  }
+  // 状态③：高负GEX（自我毁灭阶段）
+  else if(!aboveZero&&volRatio>1.5&&Math.abs(mom10)>atr*1.5){
+    state='highNegative';
+    desc='🔴 高负GEX区 — 自我毁灭式下跌';
+    strength='高负';
+  }
+  // 状态④：GEX耗尽真空区（加速后减速）
+  else if(!aboveZero&&volRatio>2.0&&Math.abs(mom5)<atr*0.3){
+    state='exhaustion';
+    desc='⚡ GEX耗尽真空区 — 弹簧压缩中';
+    strength='耗尽';
+  }
+  else{
+    state='neutral';
+    desc='🟡 GEX中性区';
+    strength='中性';
+  }
+  return{state,desc,strength,aboveZero,mom5:Math.abs(mom5)/atr,volRatio};
+}
+
+// ============================================================
+// ========== ZORA S1-S5 信号系统 ==========
+// ============================================================
+
+function zoraSignalSystem(k,gex,vp,smc,atr,rsi,bb,e12,e26,volDiag,obv,patterns){
+  let signals=[];
+  let cp=k[k.length-1].c;
+  let cpH=k[k.length-1].h;
+  let cpL=k[k.length-1].l;
+  
+  // S1: 均值回归（高正GEX震荡环境）
+  if(gex.state==='highPositive'||gex.state==='neutral'){
+    // VAL做多信号
+    if(vp&&cp<=vp.val*1.01){
+      // 验证卖盘吸收
+      let hasAbsorption=obv.div&&obv.div.type==='bull';
+      let hasReversal=k.length>2&&k[k.length-1].c>k[k.length-2].c;
+      signals.push({id:'S1',name:'均值回归做多',dir:'bull',
+        desc:vp?`价格触及VAL(${vp.val.toFixed(2)})反弹`:'价格触及支撑',
+        weight:hasAbsorption?'A':hasReversal?'B':'C',
+        entry:`${vp?vp.val.toFixed(2):'支撑位'}`,
+        target:`${vp?vp.poc.toFixed(2):'POC'}`,
+        stop:`${vp?(vp.val-atr*0.5).toFixed(2):'VAL-ATR'}`});
+    }
+    // VAH做空信号
+    if(vp&&cp>=vp.vah*0.99){
+      let hasTopDiv=obv.div&&obv.div.type==='bear';
+      signals.push({id:'S1',name:'均值回归做空',dir:'bear',
+        desc:vp?`价格触及VAH(${vp.vah.toFixed(2)})受压`:'价格触及阻力',
+        weight:hasTopDiv?'A':'B',
+        entry:`${vp?vp.vah.toFixed(2):'阻力位'}`,
+        target:`${vp?vp.poc.toFixed(2):'POC'}`,
+        stop:`${vp?(vp.vah+atr*0.5).toFixed(2):'VAH+ATR'}`});
+    }
+  }
+  
+  // S2: HVN突破加速（低正GEX趋势环境）
+  if(gex.state==='lowPositive'||gex.state==='neutral'){
+    if(vp){
+      let nearHvn=false,hvnEntry=0;
+      for(let h of vp.hvnPrices){
+        if(Math.abs(cp-h.price)/cp<0.01){nearHvn=true;hvnEntry=h.price;break;}
+      }
+      if(nearHvn){
+        let volConfirm=volDiag.spike>1.2;
+        let emaConfirm=e12>e26;
+        signals.push({id:'S2',name:'HVN突破加速做多',dir:'bull',
+          desc:`站稳HVN区域(${hvnEntry.toFixed(2)})`,
+          weight:volConfirm&&emaConfirm?'A':'B',
+          entry:`${hvnEntry.toFixed(2)}上方`,
+          target:`${vp.vah.toFixed(2)}`,
+          stop:`${(hvnEntry-atr*1.0).toFixed(2)}`});
+      }
+    }
+  }
+  
+  // S3: VP假突破反手
+  if(vp){
+    // 假突破VAH
+    if(cpH>vp.vah*1.005&&k.length>1&&k[k.length-1].c<vp.vah){
+      signals.push({id:'S3',name:'VAH假突破反手做空',dir:'bear',
+        desc:`突破VAH(${vp.vah.toFixed(2)})后收回`,
+        weight:'A',
+        entry:`${vp.vah.toFixed(2)}`,
+        target:`${vp.poc.toFixed(2)}`,
+        stop:`${(vp.vah+atr*0.8).toFixed(2)}`});
+    }
+    if(cpL<vp.val*0.995&&k.length>1&&k[k.length-1].c>vp.val){
+      signals.push({id:'S3',name:'VAL假突破反手做多',dir:'bull',
+        desc:`跌破VAL(${vp.val.toFixed(2)})后收回`,
+        weight:'A',
+        entry:`${vp.val.toFixed(2)}`,
+        target:`${vp.poc.toFixed(2)}`,
+        stop:`${(vp.val-atr*0.8).toFixed(2)}`});
+    }
+  }
+  
+  // S4: 吸收背离做多
+  let absorp=detectAbsorption(k);
+  if(absorp&&absorp.signals.length>0){
+    let hasObvDiv=absorp.obvDiv&&absorp.obvDiv.type==='bull';
+    signals.push({id:'S4',name:'吸收背离做多',dir:'bull',
+      desc:absorp.signals.map(s=>s.desc).join('; '),
+      weight:hasObvDiv?'A':'B',
+      entry:`${k[k.length-1].c.toFixed(2)}`,
+      target:vp?`${vp.vah.toFixed(2)}`:'上阻力',
+      stop:`${(k[k.length-1].l-atr*0.5).toFixed(2)}`});
+  }
+  
+  // S5: GEX真空接针（高负→耗尽）
+  if(gex.state==='exhaustion'){
+    signals.push({id:'S5',name:'GEX真空接针做多',dir:'bull',
+      desc:'价格打穿高负区进入真空区，弹簧压缩',
+      weight:'S',
+      entry:`${cp.toFixed(2)}`,
+      target:`${calcMA(c,20).toFixed(2)}`,
+      stop:`${(cp-atr*0.3).toFixed(2)}`});
+  }
+  
+  // 综合最强信号
+  signals.sort((a,b)=>{let w={S:5,A:4,B:3,C:2};return (w[b.weight]||0)-(w[a.weight]||0);});
+  return signals;
+}
+
+// ============================================================
+// ========== 回测引擎（Zora体系） ==========
+// ============================================================
+
+function backtestZora(allK,cycleName){
+  const total=allK.length,warmup=60;
+  if(total<warmup+2)return null;
+  let wins=0,losses=0,neut=0;
+  let sigCount={S1:0,S2:0,S3:0,S4:0,S5:0};
+  let sigWin={S1:0,S2:0,S3:0,S4:0,S5:0};
+  let sigLoss={S1:0,S2:0,S3:0,S4:0,S5:0};
+  let maxWinStreak=0,maxLossStreak=0,curStreak=0;
+  let totalPL=0;
+  let tradeRecords=[];
+  
+  for(let i=warmup;i<total-1;i++){
+    const sliceK=allK.slice(0,i+1);
+    const c=sliceK.map(x=>x.c),h=sliceK.map(x=>x.h),l=sliceK.map(x=>x.l),v=sliceK.map(x=>x.v);
+    const cp=c[c.length-1];
+    const rsi=calcRSI(c),bb=calcBB(c);
+    const atr=calcATR(h,l,c);
+    const e12=calcEMA(c,12),e26=calcEMA(c,26);
+    const vDiag=volDiagnosis(sliceK);
+    const gex=estimateGEX(sliceK,atr);
+    const vp=calcVP(sliceK,40);
+    const smc=calcSMC(h,l,c);
+    const obv=calcOBV(sliceK);
+    const patterns=detectPatterns(sliceK);
+    
+    const sigs=zoraSignalSystem(sliceK,gex,vp,smc,atr,rsi,bb,e12,e26,vDiag,obv,patterns);
+    if(sigs.length===0){neut++;continue;}
+    const bestSig=sigs[0];
+    
+    // 验证下一根K线方向
+    const nextK=allK[i+1];
+    const nextC=nextK.c;
+    const won=(bestSig.dir==='bull'&&nextC>cp)||(bestSig.dir==='bear'&&nextC<cp);
+    
+    // 近似盈亏计算（假定赔付80%）
+    let pl=won?0.8:-1.0;
+    totalPL+=pl;
+    
+    if(won){wins++;curStreak=curStreak>0?curStreak+1:1;
+      sigWin[bestSig.id]=(sigWin[bestSig.id]||0)+1;
+    }else{losses++;curStreak=curStreak<0?curStreak-1:-1;
+      sigLoss[bestSig.id]=(sigLoss[bestSig.id]||0)+1;
+    }
+    sigCount[bestSig.id]=(sigCount[bestSig.id]||0)+1;
+    maxWinStreak=Math.max(maxWinStreak,curStreak);
+    maxLossStreak=Math.min(maxLossStreak,curStreak);
+    
+    if(tradeRecords.length<100){
+      tradeRecords.push({idx:i,sig:bestSig.id,dir:bestSig.dir,entry:cp,exit:nextC,pl});
+    }
+  }
+  const totalSig=wins+losses;
+  const wr=totalSig>0?(wins/totalSig*100).toFixed(1):'0.0';
+  
+  // 各信号胜率
+  let sigWr={};
+  for(let s of Object.keys(sigCount)){
+    let total=sigWin[s]+(sigLoss[s]||0);
+    sigWr[s]=total>0?((sigWin[s]/total)*100).toFixed(1):'-';
+  }
+  
+  return{total:total-warmup-1,signals:totalSig,neut,wins,losses,wr,
+    totalPL:totalPL.toFixed(1),sigCount,sigWin,sigLoss,sigWr,
+    maxWinStreak,maxLoseStreak:Math.abs(maxLossStreak)};
+}
+
+// ============================================================
+// ========== VP图表渲染 ==========
+// ============================================================
+
+function renderVP(vp,cp){
+  const card=document.getElementById('vpVizCard');
+  const viz=document.getElementById('vpViz');
+  const labels=document.getElementById('vpLabels');
+  if(!vp||!vp.bins||vp.bins.length<3){card.style.display='none';return;}
+  card.style.display='block';
+  viz.innerHTML='';
+  let maxVol=Math.max(...vp.bins.map(b=>b.vol));
+  let currentPrice=cp;
+  // 找currentPrice所在区间索引
+  let currentBinIdx=-1;
+  for(let i=0;i<vp.bins.length;i++){
+    if(vp.bins[i].price>=currentPrice){currentBinIdx=i;break;}
+  }
+  for(let i=0;i<vp.bins.length;i++){
+    let b=vp.bins[i];
+    let h=maxVol>0?(b.vol/maxVol*100):0;
+    let bar=document.createElement('div');
+    bar.className='vp-bar';
+    if(b.isHvn)bar.className+=' hvn';
+    else if(b.isLvn)bar.className+=' lvn';
+    else bar.className+=' normal';
+    bar.style.height=Math.max(h,3)+'px';
+    if(i===currentBinIdx||i===currentBinIdx-1){
+      bar.style.borderLeft='1px solid #00d2ff';
+      bar.style.borderRight='1px solid #00d2ff';
+    }
+    viz.appendChild(bar);
+  }
+  labels.textContent=`VAH=${vp.vah.toFixed(2)} POC=${vp.poc.toFixed(2)} VAL=${vp.val.toFixed(2)}  |  当前价=${currentPrice.toFixed(2)}`;
+}
+
+// ============================================================
+// ========== 主分析 ==========
+// ============================================================
+
+async function startAnalysis(){
+  const btn=document.getElementById('btnAnalyze'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Zora分析中...';
+  log.textContent='正在获取数据...\n';
+  const symSelect=document.getElementById('symbol').value;
+  const symRaw=symSelect==='other'?document.getElementById('customSymbol').value.trim():symSelect;
+  if(!symRaw){log.textContent='❌ 请输入币种';btn.disabled=false;btn.innerHTML='📈 Zora四维分析';return}
+  const sym=symRaw.replace(/\s+/g,'').toUpperCase().replace('/','');
+  const futures=isFutures;
+  const base=futures?'https://fapi.binance.com/fapi/v1/klines':'https://api.binance.com/api/v3/klines';
+  const cycle=document.getElementById('cycle').value;
+  const iv={'10分钟':'5m','30分钟':'30m','1小时':'1h','4小时':'4h'}[cycle];
+  const lm=500;
+  const url=`${base}?symbol=${sym}&interval=${iv}&limit=${lm}`;
+  const htMap={'10分钟':'1h','30分钟':'1h','1小时':'4h','4小时':'1d'};
+  const htIv=htMap[cycle];
+  const htUrl=`${base}?symbol=${sym}&interval=${htIv}&limit=100`;
+
+  try{
+    const[rCur,rHt]=await Promise.all([fetch(url),fetch(htUrl)]);
+    if(!rCur.ok)throw new Error('HTTP '+rCur.status);
+    
+    const d=await rCur.json();
+    const k=d.map(x=>({o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]}));
+    const c=k.map(x=>x.c),h=k.map(x=>x.h),l=k.map(x=>x.l),v=k.map(x=>x.v),cp=c[c.length-1];
+    
+    // ===== 基础指标 =====
+    const rsi=calcRSI(c),ma=calcMA(c),bb=calcBB(c),macd=calcMACD(c),st=calcStoch(h,l,c);
+    const atr=calcATR(h,l,c);
+    const av=v.slice(-20).reduce((a,b)=>a+b,0)/20,cv=v[v.length-1],vr=av>0?cv/av:0;
+    const e12=calcEMA(c,12),e26=calcEMA(c,26);
+    const fibo=calcFib(Math.max(...h.slice(-20)),Math.min(...l.slice(-20)));
+    
+    // ===== ZORA 体系四维分析 =====
+    // 维度1: Volume Profile
+    const vp=calcVP(k);
+    // 维度2: SMC 市场结构
+    const smc=calcSMC(h,l,c);
+    // 维度3: GEX 状态估计
+    const gex=estimateGEX(k,atr);
+    // 维度4: 订单流（吸收背离+OBV）
+    const absorp=detectAbsorption(k);
+    const obv=calcOBV(k);
+    
+    // ===== K线形态 =====
+    const patterns=detectPatterns(k);
+    // ===== 关键价位 =====
+    const levels=keyLevels(h,l,c);
+    // ===== 成交量诊断 =====
+    const volDiag=volDiagnosis(k);
+    
+    // ===== 大周期方向 =====
+    let htTrend=null,htInfo='';
+    if(rHt.ok){
+      const hd=await rHt.json(),hk=hd.map(x=>({o:+x[1],h:+x[2],l:+x[3],c:+x[4],v:+x[5]}));
+      const hc=hk.map(x=>x.c),hcp=hc[hc.length-1];
+      const hma20=calcMA(hc,20),he12=calcEMA(hc,12),he26=calcEMA(hc,26);
+      htTrend=he12>he26&&hcp>hma20?'上涨':he12<he26&&hcp<hma20?'下跌':'中性';
+      htInfo=`${htMap[cycle]}周期: ${htTrend==='上涨'?'🟢':htTrend==='下跌'?'🔴':'🟡'} ${htTrend} 价=${hcp.toFixed(2)}`;
+    }
+    
+    // ===== ZORA S1-S5 信号 =====
+    const zoraSignals=zoraSignalSystem(k,gex,vp,smc,atr,rsi,bb,e12,e26,volDiag,obv,patterns);
+    
+    // ===== 保存数据 =====
+    lastK=k;lastCycle=cycle;lastSym=sym;lastSymRaw=symRaw;lastFutures=futures;
+    
+    // ===== 渲染VP图 =====
+    renderVP(vp,cp);
+    
+    // ===== SMC信息 =====
+    let smcStr=`SMC趋势: ${smc.trend==='bull'?'🟢多头':smc.trend==='bear'?'🔴空头':'🟡中性'}`;
+    if(smc.pos)smcStr+=` | ${smc.pos}`;
+    if(smc.ob.length>0){
+      let nearestOB=smc.ob[0];
+      smcStr+=` | 最近OB: ${nearestOB.type==='bull'?'买方':'卖方'}OB @ ${nearestOB.price.toFixed(2)}`;
+    }
+    document.getElementById('smcInfo').textContent=smcStr;
+    
+    // ===== 信号综合 =====
+    let signalStr='';
+    if(zoraSignals.length>0){
+      let best=zoraSignals[0];
+      let dirEmoji=best.dir==='bull'?'🟢':'🔴';
+      let weightBadge=best.weight==='S'?'🟠S级':best.weight==='A'?'🔵A级':best.weight==='B'?'⚪B级':'⚪C级';
+      signalStr=`\n${'─'.repeat(30)}\n🏆 最优信号: ${dirEmoji} ${best.name} [${weightBadge}]\n  入场: ${best.entry}  止损: ${best.stop}  目标: ${best.target}\n  逻辑: ${best.desc}`;
+    }else{
+      signalStr='\n⏳ 当前无明确信号，继续观察';
+    }
+    
+    lastData={sym:symRaw,cycle,market:futures?'合约':'现货',cp,rsi,ma,bb,macd,st,atr,av,cv,vr,fibo,htTrend,htInfo,
+              vp,smc,gex,absorp,obv,volDiag,patterns,levels,zoraSignals};
+    
+    // ===== 构建输出 =====
+    const cvR=volDiag.spike>1.5?`🔥 ${volDiag.spike.toFixed(1)}x放量`:
+              volDiag.spike<0.6?`🥶 ${volDiag.spike.toFixed(1)}x缩量`:`正常${volDiag.spike.toFixed(1)}x`;
+    let patStr=patterns.length?patterns.map(p=>p.name).join(' | '):'无显著形态';
+    let obvStr=obv.div?obv.div.name:`OBV${obv.trend==='up'?'↑':'↓'}`;
+    let volDiagStr=volDiag.diag.length?volDiag.diag.map(d=>d.name).join('\n'):'无量能异常';
+    
+    // 四维状态
+    let gexStr=gex.desc;
+    let smcDirStr=smc.trend==='bull'?'🟢多头':smc.trend==='bear'?'🔴空头':'🟡中性';
+    let vpStr=vp?`VAH=${vp.vah.toFixed(2)} VAL=${vp.val.toFixed(2)} POC=${vp.poc.toFixed(2)}`:'数据不足';
+    
+    log.textContent=`📊 ${symRaw} · ${cycle} · ${futures?'合约':'现货'}  |  ${gexStr}
+━━━━━━━━━━━━━━━━━━━━━━━━
+💰 价格: ${cp.toFixed(2)}  |  ${htInfo}
+
+【ZORA四维分析】
+📊 VP成交分布: ${vpStr}
+🏗 SMC结构: ${smcDirStr}  ${smc.pos||''}
+⚡ GEX状态: ${gexStr}
+💧 订单流: ${obvStr}
+
+【形态与量能】
+🕯 ${patStr}
+📊 量: ${cvR}
+${volDiagStr}
+
+【传统指标】
+RSI=${rsi.toFixed(1)} | MA20=${ma.toFixed(2)}
+EMA12/26=${e12.toFixed(1)}/${e26.toFixed(1)} ${e12>e26?'↑':'↓'}
+BB上=${bb.upper.toFixed(2)} 中=${bb.sma.toFixed(2)} 下=${bb.lower.toFixed(2)}
+MACD ${macd.macdLine>macd.signalLine?'↑金叉':'↓死叉'}
+ATR=${atr.toFixed(2)} | 量比=${vr.toFixed(2)}
+斐波阻力=${fibo.Resistance.toFixed(2)} 支撑=${fibo.Support.toFixed(2)}
+
+【关键价位】
+阻力: ${levels.resistances.map(x=>x.toFixed(2)).join(', ')}
+支撑: ${levels.supports.map(x=>x.toFixed(2)).join(', ')}
+
+${signalStr}
+${'─'.repeat(30)}
+🤖 点下方AI分析获取操作建议`;
+    
+    // 显示信号详解按钮
+    const sigBtn=document.getElementById('btnSignal');
+    sigBtn.style.display=zoraSignals.length>0?'block':'none';
+    
+  }catch(e){
+    log.textContent='❌ 错误: '+e.message+'\n提示: 检查币种/网络/VPN';
+  }
+  btn.disabled=false;btn.innerHTML='📈 Zora四维分析';
+}
+
+// ========== 信号详解弹窗 ==========
+function showSignalDetail(){
+  if(!lastData.zoraSignals||lastData.zoraSignals.length===0){alert('暂无信号，请先分析');return}
+  const log=document.getElementById('logOutput');
+  let s=lastData.zoraSignals;
+  let lines=['📋 ZORA信号系统 — 完整详情','━'.repeat(40)];
+  let wMap={S:'🟠S级-强力',A:'🔵A级-推荐',B:'⚪B级-谨慎',C:'⚪C级-放弃'};
+  for(let sig of s){
+    let dirEmoji=sig.dir==='bull'?'🟢做多':'🔴做空';
+    lines.push(`\n${sig.id} ${dirEmoji} ${sig.name}`);
+    lines.push(`  权重: ${wMap[sig.weight]||sig.weight}`);
+    lines.push(`  入场: ${sig.entry}`);
+    lines.push(`  止损: ${sig.stop}`);
+    lines.push(`  目标: ${sig.target}`);
+    lines.push(`  逻辑: ${sig.desc}`);
+  }
+  lines.push('\n⚠️ 信号仅供参考，结合风控使用');
+  log.textContent=lines.join('\n');
+}
+
+// ========== 回测按钮 ==========
+async function runBacktestBtn(){
+  if(!lastK.length){alert('请先点击"开始分析"获取数据！');return}
+  const btn=document.getElementById('btnBacktest'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Zora回测中...';
+  const bt=backtestZora(lastK,lastCycle);
+  if(bt){
+    let lines=[`📊 ZORA体系回测统计（${lastSymRaw} · ${lastCycle}）`,`${'─'.repeat(30)}`];
+    lines.push(`📊 ${bt.total}次模拟 | 信号${bt.signals}次 中性${bt.neut}次 | 胜率${bt.wr}%`);
+    lines.push(`💰 累计盈亏: ${bt.totalPL}单（假定赔付80%）`);
+    lines.push(`🏆 最长连赢: ${bt.maxWinStreak}次 | 最长连亏: ${bt.maxLoseStreak}次`);
+    lines.push(``);
+    lines.push(`📈 各信号胜率:`);
+    for(let s of Object.keys(bt.sigCount)){
+      let total=bt.sigCount[s];
+      let wr=bt.sigWr[s];
+      lines.push(`  ${s}: ${total}次 胜率${wr}%`);
+    }
+    lines.push(``);
+    lines.push(`⚠️ 回测仅供参考`);
+    log.textContent=lines.join('\n');
+  }
+  btn.disabled=false;btn.innerHTML='📊 Zora回测';
+}
+
+// ========== AI分析（Zora体系） ==========
+async function aiAnalysis(){
+  const key=document.getElementById('apiKey').value.trim()||apiKey;
+  if(!key){alert('请先输入 DeepSeek API Key！');return}
+  if(!lastData.cp){alert('请先点击"开始分析"获取数据！');return}
+  apiKey=key;localStorage.setItem('deepseek_api_key',key);
+  const btn=document.getElementById('btnAI'),log=document.getElementById('logOutput');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>AI分析中...';
+  log.textContent+='\n🤖 正在请求 DeepSeek...\n';
+  const d=lastData,cd=d.cycle+'事件合约';
+  
+  // Zora体系数据
+  const gexInfo=d.gex?d.gex.desc:'未知';
+  const vpInfo=d.vp?`VAH=${d.vp.vah.toFixed(2)} VAL=${d.vp.val.toFixed(2)} POC=${d.vp.poc.toFixed(2)}`:'无';
+  const smcInfo=`趋势=${d.smc.trend==='bull'?'多头':d.smc.trend==='bear'?'空头':'中性'}`;
+  const obvInfo=d.obv.div?d.obv.div.name:`OBV${d.obv.trend==='up'?'↑':'↓'}`;
+  
+  // 最优信号
+  let bestSig='无明确信号';
+  if(d.zoraSignals&&d.zoraSignals.length>0){
+    let s=d.zoraSignals[0];
+    bestSig=`${s.id} ${s.dir==='bull'?'做多':'做空'} ${s.name} [${s.weight}级] 入场${s.entry} 止损${s.stop} 目标${s.target}`;
+  }
+  
+  const patInfo=d.patterns&&d.patterns.length?d.patterns.map(p=>p.name).join('；'):'无显著形态';
+  const htInfo=d.htInfo||'无大周期数据';
+  const lvInfo=d.levels?`阻力=${d.levels.resistances.slice(0,3).map(x=>x.toFixed(2)).join(',')} 支撑=${d.levels.supports.slice(0,3).map(x=>x.toFixed(2)).join(',')}`:'';
+
+  const fiboStr=d.fibo?`斐波阻力=${d.fibo.Resistance.toFixed(2)} 支撑=${d.fibo.Support.toFixed(2)}`:'斐波数据不足';
+  const rsiStr=d.rsi?d.rsi.toFixed(1):'?';
+  const e12Str=d.e12?d.e12.toFixed(1):'?';
+  const e26Str=d.e26?d.e26.toFixed(1):'?';
+  const macdStr=d.macd?(d.macd.macdLine>d.macd.signalLine?'金叉':'死叉'):'?';
+  const vrStr=d.vr?d.vr.toFixed(1):'?';
+  const atrStr=d.atr?d.atr.toFixed(2):'?';
+  const prompt=`你是一位精通SMC+订单流+VP+GEX的交易大师。分析 ${d.sym} ${cd}。
+
+【ZORA四维诊断】
+GEX状态: ${gexInfo}
+VP成交分布: ${vpInfo}
+SMC结构: ${smcInfo}
+订单流: ${obvInfo}
+
+【最优信号】
+${bestSig}
+
+【量价形态】
+K线: ${patInfo}
+量能: 量比${vrStr}x ATR=${atrStr}
+
+【关键位】
+${lvInfo}
+${fiboStr}
+
+【指标】
+RSI=${rsiStr} EMA12/26=${e12Str}/${e26Str} MACD=${macdStr}
+
+【大周期】
+${htInfo}
+
+回答格式（严格4行）：
+维度诊断：一句话概括GEX+VP+SMC状态
+方向：多/空（只给多或空，不给观望）
+操作：入场价位-止损价位-目标价位
+逻辑：一句话说明核心驱动（基于资金博弈而非形态）`;
+
+  try{
+    const controller=new AbortController();
+    const timeoutId=setTimeout(()=>controller.abort(),30000);
+    const r=await fetch('https://api.deepseek.com/chat/completions',{
+      method:'POST',
+      signal:controller.signal,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+      body:JSON.stringify({model:document.getElementById('aiModel').value,
+        messages:[{role:'system',content:'你是精通SMC+订单流+VP的交易大师。只给明确多/空判断。回答基于资金博弈逻辑而非技术指标形态。不超过6行。'},
+                  {role:'user',content:prompt}],temperature:.2,max_tokens:400})
+    });
+    clearTimeout(timeoutId);
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error?.message||'HTTP '+r.status);
+    log.textContent+=j.choices[0].message.content;
+  }catch(e){
+    if(e.name==='AbortError'){
+      log.textContent+='\n❌ 请求超时(30秒)。请检查：\n  ① API Key 是否正确\n  ② 网络能否访问 api.deepseek.com\n  ③ 是否需要开启代理/VPN';
+    }else{
+      log.textContent+='\n❌ AI失败: '+e.message;
+    }
+  }
+  btn.disabled=false;btn.innerHTML='🤖 AI 智能分析（Zora体系）';
+}
+
+function onSymbolChange(){
+  const v=document.getElementById('symbol').value;
+  document.getElementById('customSymbolRow').style.display=v==='other'?'block':'none';
+}
+
+let isFutures=false;
+function switchMarket(m){isFutures=m==='futures';const bs=document.getElementById('btnSpot'),bf=document.getElementById('btnFutures');bs.className=isFutures?'seg-btn':'seg-btn seg-active spot';bf.className=isFutures?'seg-btn seg-active futures':'seg-btn';}
+
+function saveKey(){
+  const k=document.getElementById('apiKey').value.trim();
+  if(k){apiKey=k;localStorage.setItem('deepseek_api_key',k);alert('Key 已保存！')}
+}
+if(apiKey)document.getElementById('apiKey').value=apiKey;
+</script>
+</body>
+</html>
